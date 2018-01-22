@@ -16,42 +16,50 @@ MAX_TITLE_LEN=40
 feed_file=/tmp/feed
 title_file=/tmp/titles
 entries_file=/tmp/entries
+parse_file=/tmp/parse
 
+# channel id file format:
+# <channel_id> <channel_name>
 chid_file=$HOME/.config/ytrecent/channel_ids
 
+# make sure list of entries is empty from start
 rm -f $entries_file
 
 while read line; do
     chid=$(echo $line | cut -c1-$CHID_LEN)
+    author=$(echo $line | cut -c$(($CHID_LEN+2))-)
     if [[ ! $chid =~ $CHID_REGEX ]]; then
         echo warning: invalid channel id -- $line
         continue
     fi
 
     curl -s ${FEED_URL}$chid > $feed_file
-    entries=$(xml_grep entry $feed_file)
-    author=$(xml_grep --nb_results 1 author /tmp/feed \
-           | xml_grep name --text_only)
-    rm -f $feed
 
-    vids=( $(echo $entries | xml_grep yt:videoId --text_only) )
-    dates=( $(echo $entries | xml_grep published --text_only) )
-    echo $entries | xml_grep title --text_only > $title_file
-    mapfile -t titles < $title_file
-    rm -f $title_file
+    grep "Error 404" $feed_file > /dev/null
+    if [[ $? == 0 ]]; then
+        echo warning: could not find feed for channel id -- $line
+        continue
+    fi
 
-    for ((i = 0; i < ${#vids[@]}; ++i)); do
-        date=$(date -d "${dates[$i]}" +"$DATE_FMT")
-        title=${titles[$i]}
-        if (( ${#titles[$i]} > MAX_TITLE_LEN )); then
-            title=$(echo $title | cut -c1-$(expr $MAX_TITLE_LEN - 3))
-            title=$title...
+    echo Retrieving videos from channel "$author"...
+
+    xml_grep --cond yt:videoId --cond title --cond published \
+             --text_only $feed_file > $parse_file
+    mapfile -t items < $parse_file
+
+    item_count=${#items[@]}
+    for ((i = 2; i < $item_count; i+=3)); do
+        vid=${items[$i]}
+        title=${items[$(($i+1))]}
+        date=$(date -d "${items[$(($i+2))]}" +"$DATE_FMT")
+        if (( ${#title} > $MAX_TITLE_LEN )); then
+            title=$(echo $title | cut -c1-$(($MAX_TITLE_LEN-3)))...
         fi
 
-        echo "$author$SEP$title$SEP$date$SEP${vids[$i]}"\
+        echo "$author$SEP$title$SEP$date$SEP$vid"\
             >> $entries_file
     done
 done < $chid_file
 
 cat $entries_file | sort -k 3 -t"$SEP" | column -t -s"$SEP"
-rm -f $title_file
+#rm -f $entries_file
