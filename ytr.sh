@@ -1,65 +1,75 @@
-#!/bin/bash
+#!/bin/sh
 
 # length and regex to channel ids
 CHID_LEN=24
-CHID_REGEX=^[a-zA-Z0-9\_-]{$CHID_LEN}$
-
-# url to rss feed with 15 most recent videos
-FEED_URL=https://www.youtube.com/feeds/videos.xml?channel_id=
-
-# separator used between fields, choose one that is rarely used in titles
-SEP=\~
-DATE_FMT="%F %H:%M"
-MAX_TITLE_LEN=40
-
-# tmp files
-feed_file=/tmp/feed
-title_file=/tmp/titles
-entries_file=/tmp/entries
-parse_file=/tmp/parse
+CHID_REGEX="^[a-zA-Z0-9\_-]{$CHID_LEN}$"
 
 # channel id file format:
-# <channel_id> <channel_name>
-chid_file=$HOME/.config/ytrecent/channel_ids
+# <channel1_id> <channel1_name>
+# <channel2_id> <channel2_name>
+#      :               :
+CHID_FILE="$HOME/.config/ytrecent/channel_ids"
 
-# make sure list of entries is empty from start
+# start of urls to rss feeds with recent videos
+FEED_URL="https://www.youtube.com/feeds/videos.xml?channel_id="
+
+# separator used between fields, choose one that is rarely used in titles
+SEP="~"
+# format of date output, will be used for sorting
+DATE_FMT="%F %H:%M"
+# maximum length of title output, longer titles will be cut
+MAX_TITLE_LEN=60
+
+# temporary files
+tmp_dir="/tmp/ytr"
+feed_file="$tmp_dir/feed"
+title_file="$tmp_dir/titles"
+entries_file="$tmp_dir/entries"
+parse_file="$tmp_dir/parse"
+
+# make sure tmp dir exists
+mkdir -p $tmp_dir
+# empty entries file
 rm -f $entries_file
 
-while read line; do
-    chid=$(echo $line | cut -c1-$CHID_LEN)
-    author=$(echo $line | cut -c$(($CHID_LEN+2))-)
-    if [[ ! $chid =~ $CHID_REGEX ]]; then
-        echo warning: invalid channel id -- $line
-        continue
-    fi
-
-    curl -s ${FEED_URL}$chid > $feed_file
-
-    grep "Error 404" $feed_file > /dev/null
-    if [[ $? == 0 ]]; then
-        echo warning: could not find feed for channel id -- $line
+# fetch and parse channels
+while read chid author; do
+    # validate chid
+    if ! echo $chid | grep -q -E $CHID_REGEX; then
+        echo warning: invalid channel id -- $chid
         continue
     fi
 
     echo Retrieving videos from channel "$author"...
 
-    xml_grep --cond yt:videoId --cond title --cond published \
-             --text_only $feed_file > $parse_file
-    mapfile -t items < $parse_file
+    # fetch rss feed
+    curl -s ${FEED_URL}$chid > $feed_file
+    if grep -q "Error 404" $feed_file; then
+        echo warning: could not find feed for channel id -- $chid
+        continue
+    fi
 
-    item_count=${#items[@]}
-    for ((i = 2; i < $item_count; i+=3)); do
-        vid=${items[$i]}
-        title=${items[$(($i+1))]}
-        date=$(date -d "${items[$(($i+2))]}" +"$DATE_FMT")
-        if (( ${#title} > $MAX_TITLE_LEN )); then
-            title=$(echo $title | cut -c1-$(($MAX_TITLE_LEN-3)))...
+    # parse videos from xml file
+    ifs_prev=$IFS
+    IFS=\>
+    while read -d \< tag content; do
+        if [ "$tag" = "yt:videoId" ]; then
+            printf "%s%s" "$content" "$SEP"
+        elif [ "$tag" = "title" ]; then
+            if [ "$(expr length $content)" -gt $MAX_TITLE_LEN ]; then
+                title=$(echo $content | cut -c1-$(expr $MAX_TITLE_LEN - 3))...
+            else
+                title=$content
+            fi
+            printf "%s%s%s%s" "$author" "$SEP" "$title" "$SEP" \
+                | recode -q html..ascii
+        elif [ "$tag" = "published" ]; then
+            date=$(date -d "$content" +"$DATE_FMT")
+            printf "%s\n" "$date"
         fi
+    done < $feed_file | tail -n +2 >> $entries_file
+    IFS=$ifs_prev
+done < $CHID_FILE
 
-        echo "$author$SEP$title$SEP$date$SEP$vid"\
-            >> $entries_file
-    done
-done < $chid_file
-
-cat $entries_file | sort -k 3 -t"$SEP" | column -t -s"$SEP"
-#rm -f $entries_file
+# sort by date and align columns
+cat $entries_file | sort -k 4 -t"$SEP" | column -t -s"$SEP"
