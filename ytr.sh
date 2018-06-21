@@ -17,8 +17,8 @@ FEED_URL="https://www.youtube.com/feeds/videos.xml?channel_id="
 SEP="~"
 # format of date output, will be used for sorting
 DATE_FMT="%F %H:%M"
-# maximum length of title output, longer titles will be cut
-MAX_TITLE_LEN=60
+# maximum length of title output, longer titles will be truncated
+TITLE_LEN=60
 
 # temporary files
 tmp_dir="/tmp/ytr"
@@ -56,13 +56,16 @@ while read chid author; do
         if [ "$tag" = "yt:videoId" ]; then
             printf "%s%s" "$content" "$SEP"
         elif [ "$tag" = "title" ]; then
-            if [ "$(expr length $content)" -gt $MAX_TITLE_LEN ]; then
-                title=$(echo $content | cut -c1-$(expr $MAX_TITLE_LEN - 3))...
-            else
-                title=$content
+            if [ "$(expr length $content)" -gt $TITLE_LEN ];
+            then title=$(echo $content | cut -c1-$(expr $TITLE_LEN - 3))..
+            else title=$content
             fi
-            printf "%s%s%s%s" "$author" "$SEP" "$title" "$SEP" \
-                | recode -q html..ascii
+            if [ -x "$(command -v recode)" ]; then
+                printf "%s%s%s%s" "$author" "$SEP" "$title" "$SEP" \
+                    | recode -q html..ascii
+            else
+                printf "%s%s%s%s" "$author" "$SEP" "$title" "$SEP"
+            fi
         elif [ "$tag" = "published" ]; then
             date=$(date -d "$content" +"$DATE_FMT")
             printf "%s\n" "$date"
