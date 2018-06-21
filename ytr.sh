@@ -23,14 +23,14 @@ TITLE_LEN=60
 # temporary files
 tmp_dir="/tmp/ytr"
 feed_file="$tmp_dir/feed"
-title_file="$tmp_dir/titles"
 entries_file="$tmp_dir/entries"
-parse_file="$tmp_dir/parse"
 
 # make sure tmp dir exists
 mkdir -p $tmp_dir
 # empty entries file
 rm -f $entries_file
+# rm comments and empty lines from chid_file
+sed 's:#.*$::g;/^\-*$/d' $CHID_FILE > $tmp_dir/chid
 
 # fetch and parse channels
 while read chid author; do
@@ -72,7 +72,7 @@ while read chid author; do
         fi
     done < $feed_file | tail -n +2 >> $entries_file
     IFS=$ifs_prev
-done < $CHID_FILE
+done < $tmp_dir/chid
 
 # sort by date and align columns
 cat $entries_file | sort -k 4 -t"$SEP" | column -t -s"$SEP"
