@@ -22,34 +22,34 @@ TITLE_LEN=60
 
 # temporary files
 tmp_dir="/tmp/ytr"
-feed_file="$tmp_dir/feed"
+feeds_dir="$tmp_dir/feeds"
 entries_file="$tmp_dir/entries"
 
-# make sure tmp dir exists
-mkdir -p $tmp_dir
+# make sure dirs exist
+mkdir -p $tmp_dir || exit
+mkdir -p $feeds_dir || exit
 # empty entries file
-rm -f $entries_file
-# rm comments and empty lines from chid_file
-sed 's:#.*$::g;/^\-*$/d' $CHID_FILE > $tmp_dir/chid
+rm -f $entries_file || exit
 
-# fetch and parse channels
+# rm comments, remove invalid chids
+sed 's:#.*$::g;/^\-*$/d' $CHID_FILE > $tmp_dir/chid_strip
 while read chid author; do
-    # validate chid
-    if ! echo $chid | grep -q -E $CHID_REGEX; then
-        echo warning: invalid channel id -- $chid
-        continue
+    if echo $chid | grep -q -E $CHID_REGEX;
+    then echo "$chid $author"
+    else echo "warning: invalid channel id -- $chid" 1>&2
     fi
+done < $tmp_dir/chid_strip > $tmp_dir/chid
 
-    echo Retrieving videos from channel "$author"...
+# fetch rss feeds
+curl -s $(while read chid author; do
+    printf '%s%s -o %s/%s ' "$FEED_URL" "$chid" "$feeds_dir" "$chid"
+done < $tmp_dir/chid)
 
-    # fetch rss feed
-    curl -s ${FEED_URL}$chid > $feed_file
-    if grep -q "Error 404" $feed_file; then
-        echo warning: could not find feed for channel id -- $chid
-        continue
-    fi
+# parse channels
+while read chid author; do
+    feed_file=$feeds_dir/$chid
 
-    # parse videos from xml file
+    # parse videos from channel
     ifs_prev=$IFS
     IFS=\>
     while read -d \< tag content; do
