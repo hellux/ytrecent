@@ -20,9 +20,13 @@ CFG_FILE="$CFG_DIR/config.sh"
 # separator used between fields, choose one that is rarely used in titles
 SEP="~"
 # format of date output, will be used for sorting
-DATE_FMT="%F"
+DATE_FMT="%F %H:%M"
 # column order for output table
 COL_ORDER="author,title,date,id"
+# translate html encodings to ascii (eg. &amp; -> &)
+RECODE=true
+# directory for temporary files
+TMP_DIR="/tmp/ytr"
 
 # load user settings
 if [ -r $CFG_FILE ]; then
@@ -30,33 +34,36 @@ if [ -r $CFG_FILE ]; then
 fi
 
 column_args="$column_args --table --separator "$SEP" \
-             --table-columns id,author,title,date --table-order $COL_ORDER"
+             --table-columns title,id,author,date_utc,date \
+             --table-hide date_utc \
+             --table-order $COL_ORDER"
 
 # temporary files
-tmp_dir="/tmp/ytr"
-feeds_dir="$tmp_dir/feeds"
-entries_file="$tmp_dir/entries"
+feeds_dir="$TMP_DIR/feeds"
+entries_file="$TMP_DIR/entries"
+chids_file="$TMP_DIR/chids"
 
 # make sure dirs exist
-mkdir -p $tmp_dir || exit
+mkdir -p $TMP_DIR || exit
 mkdir -p $feeds_dir || exit
 # empty entries file
 rm -f $entries_file || exit
 
 # rm comments from CHID_FILE
-sed 's:#.*$::g;/^\-*$/d' $CHID_FILE > $tmp_dir/chid_strip
+sed 's:#.*$::g;/^\-*$/d' $CHID_FILE > ${chids_file}_stripped
 # rm invalid chids
 while read chid author; do
     if echo $chid | grep -q -E $CHID_REGEX;
     then echo "$chid $author"
     else echo "warning: invalid channel id -- $chid" 1>&2
     fi
-done < $tmp_dir/chid_strip > $tmp_dir/chid
+done < ${chids_file}_stripped > $chids_file
+rm ${chids_file}_stripped
 
 # fetch rss feeds
 curl -s $(while read chid author; do
     printf '%s%s -o %s/%s ' "$FEED_URL" "$chid" "$feeds_dir" "$chid"
-done < $tmp_dir/chid)
+done < $chids_file)
 
 # parse channels
 while read chid author; do
@@ -67,19 +74,38 @@ while read chid author; do
     IFS=\>
     while read -d \< tag content; do
         if [ "$tag" = "yt:videoId" ]; then
-            printf "%s%s" "$content" "$SEP"
+            printf "%s" "$content$SEP"
         elif [ "$tag" = "title" ]; then
-            output="$author$SEP$content$SEP"
-            if [ -x "$(command -v recode)" ]; then
-                output=$(echo $output | recode -q html..ascii)
-            fi
-            printf "%s" "$output"
+            title=$content
+            printf "%s" "$author$SEP$title$SEP"
         elif [ "$tag" = "published" ]; then
-            printf "%s\n" "$(date -d "$content" +"$DATE_FMT")"
+            date_utc=$content
+            date=$(date -d "$date_utc" +"$DATE_FMT")
+            printf "%s\n" "$date_utc$SEP$date"
         fi
     done < $feed_file | tail -n +2 >> $entries_file
     IFS=$ifs_prev
-done < $tmp_dir/chid
+done < $chids_file
 
-# sort by date and align columns
-cat $entries_file | sort -k 4 -t"$SEP" | column $column_args
+cut -d$SEP -f 3 $entries_file > $TMP_DIR/titles
+cut -d$SEP -f 1,2,4,5 $entries_file > $TMP_DIR/rest
+paste -d$SEP $TMP_DIR/titles $TMP_DIR/rest > $entries_file
+if [ "$RECODE" = "true" ]; then
+    if [ -x "$(command -v recode)" ]; then
+        recode -q html..ascii $TMP_DIR/titles
+    else
+        echo "warning: 'recode' not installed, HTML encodings will remain" 1>&2
+    fi
+fi
+rm $TMP_DIR/titles $TMP_DIR/rest
+
+# sort by date_utc and align columns
+sort -k 4 -t"$SEP" $entries_file | column $column_args
+
+# clean up
+rm $entries_file
+rm $chids_file
+rm -r $feeds_dir
+if [ -z "$(ls -A $TMP_DIR)" ]; then
+    rmdir $TMP_DIR
+fi
