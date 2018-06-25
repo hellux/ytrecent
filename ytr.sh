@@ -8,6 +8,7 @@ CHID_REGEX="^[a-zA-Z0-9\_-]{$CHID_LEN}$"
 # start of urls to rss feeds with recent videos
 FEED_URL="https://www.youtube.com/feeds/videos.xml?channel_id="
 
+TMP_DIR="/tmp/ytr"
 CFG_DIR="$HOME/.config/ytrecent"
 # channel id file format:
 # <channel1_id> <channel1_name>
@@ -16,38 +17,50 @@ CFG_DIR="$HOME/.config/ytrecent"
 CHID_FILE="$CFG_DIR/channel_ids"
 CFG_FILE="$CFG_DIR/config.sh"
 
+# temporary files
+feeds_dir="$TMP_DIR/feeds"
+entries_file="$TMP_DIR/entries"
+chids_file="$TMP_DIR/chids"
+col_chid=$TMP_DIR/col_chids
+col_author=$TMP_DIR/col_author
+col_title=$TMP_DIR/col_title
+col_date=$TMP_DIR/col_date
+
 # set default settings
-# separator used between fields, choose one that is rarely used in titles
-SEP="~"
 # format of date output, will be used for sorting
 DATE_FMT="%F %H:%M"
 # column order for output table
 COL_ORDER="author,title,date,id"
 # translate html encodings to ascii (eg. &amp; -> &)
 RECODE=true
-# directory for temporary files
-TMP_DIR="/tmp/ytr"
+# order of columns in output table
+COLS="$col_author $col_title $col_date $col_chid"
 
 # load user settings
 if [ -r $CFG_FILE ]; then
     source $CFG_FILE
 fi
 
-column_args="$column_args --table --separator "$SEP" \
-             --table-columns title,id,author,date_utc,date \
-             --table-hide date_utc \
-             --table-order $COL_ORDER"
+if [ ! -r $CHID_FILE ]; then
+    echo "error: no file with channel IDs found at $CHID_FILE"
+    exit 1;
+fi
 
-# temporary files
-feeds_dir="$TMP_DIR/feeds"
-entries_file="$TMP_DIR/entries"
-chids_file="$TMP_DIR/chids"
+if [ "$RECODE" = "true" -a ! -x "$(command -v recode)" ]; then
+    echo "warning: 'recode' not installed, HTML encodings will remain" 1>&2
+    RECODE=false
+fi
+
+if date -v 1d > /dev/null 2>&1;
+then BSD_DATE=true
+else BSD_DATE=false
+fi
 
 # make sure dirs exist
-mkdir -p $TMP_DIR || exit
-mkdir -p $feeds_dir || exit
+mkdir -p $TMP_DIR || exit 1
+mkdir -p $feeds_dir || exit 1
 # empty entries file
-rm -f $entries_file || exit
+rm -f $entries_file || exit 1
 
 # rm comments from CHID_FILE
 sed 's:#.*$::g;/^\-*$/d' $CHID_FILE > ${chids_file}_stripped
@@ -74,37 +87,39 @@ while read chid author; do
     IFS=\>
     while read -d \< tag content; do
         if [ "$tag" = "yt:videoId" ]; then
-            printf "%s" "$content$SEP"
+            printf "%s\t" "$content"
         elif [ "$tag" = "title" ]; then
             title=$content
-            printf "%s" "$author$SEP$title$SEP"
+            printf "%s\t%s\t" "$author" "$title"
         elif [ "$tag" = "published" ]; then
             date_utc=$content
-            date=$(date -d "$date_utc" +"$DATE_FMT")
-            printf "%s\n" "$date_utc$SEP$date"
+            if [ "$BSD_DATE" = "true" ]; then
+                date=$(date -j -f "%FT%T+00:00 %Z" "$date_utc UTC" "+$DATE_FMT")
+            else 
+                date=$(date -d "$date_utc" +"$DATE_FMT")
+			fi
+            printf "%s\t%s\n" "$date_utc" "$date"
         fi
     done < $feed_file | tail -n +2 >> $entries_file
     IFS=$ifs_prev
 done < $chids_file
 
-cut -d$SEP -f 3 $entries_file > $TMP_DIR/titles
-cut -d$SEP -f 1,2,4,5 $entries_file > $TMP_DIR/rest
-paste -d$SEP $TMP_DIR/titles $TMP_DIR/rest > $entries_file
+sort -t $'\t' -k 4 $entries_file -o $entries_file
+cut -f 1 $entries_file > $col_chid
+cut -f 2 $entries_file > $col_author
+cut -f 3 $entries_file > $col_title
+cut -f 5 $entries_file > $col_date
 if [ "$RECODE" = "true" ]; then
-    if [ -x "$(command -v recode)" ]; then
-        recode -q html..ascii $TMP_DIR/titles
-    else
-        echo "warning: 'recode' not installed, HTML encodings will remain" 1>&2
-    fi
+    recode -q html..ascii $col_title
 fi
-rm $TMP_DIR/titles $TMP_DIR/rest
+paste $COLS > $entries_file
 
 # sort by date_utc and align columns
-sort -k 4 -t"$SEP" $entries_file | column $column_args
+column -t -s $'\t' $entries_file
 
 # clean up
-rm $entries_file
-rm $chids_file
+rm $entries_file $chids_file
+rm $col_chid $col_author $col_title $col_date
 rm -r $feeds_dir
 if [ -z "$(ls -A $TMP_DIR)" ]; then
     rmdir $TMP_DIR
