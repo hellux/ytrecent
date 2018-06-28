@@ -29,17 +29,15 @@ col_date=$TMP_DIR/col_date
 # set default settings
 # format of date output, will be used for sorting
 DATE_FMT="%F %H:%M"
-# column order for output table
-COL_ORDER="author,title,date,id"
-# translate html encodings to ascii (eg. &amp; -> &)
+# translate html encodings to ascii, eg. &amp; -> & (requires recode)
 RECODE=true
 # order of columns in output table
 COLS="$col_author $col_title $col_date $col_chid"
+# truncate titles longer than below
+TITLE_LEN=70
 
 # load user settings
-if [ -r $CFG_FILE ]; then
-    source $CFG_FILE
-fi
+[ -r $CFG_FILE ] && source $CFG_FILE
 
 if [ ! -r $CHID_FILE ]; then
     echo "error: no file with channel IDs found at $CHID_FILE"
@@ -109,18 +107,17 @@ cut -f 1 $entries_file > $col_chid
 cut -f 2 $entries_file > $col_author
 cut -f 3 $entries_file > $col_title
 cut -f 5 $entries_file > $col_date
-if [ "$RECODE" = "true" ]; then
-    recode -q html..ascii $col_title
-fi
+
+[ "$RECODE" = "true" ] && recode -f -q html..ascii $col_title
+cut -c1-$TITLE_LEN $col_title > ${col_title}_tr
+mv ${col_title}_tr $col_title
+
 paste $COLS > $entries_file
 
-# sort by date_utc and align columns
 column -t -s $'\t' $entries_file
 
 # clean up
 rm $entries_file $chids_file
 rm $col_chid $col_author $col_title $col_date
 rm -r $feeds_dir
-if [ -z "$(ls -A $TMP_DIR)" ]; then
-    rmdir $TMP_DIR
-fi
+[ -z "$(ls -A $TMP_DIR)" ] && rmdir $TMP_DIR
