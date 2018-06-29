@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -u
 
 # length and regex to channel ids
@@ -92,7 +92,7 @@ while read chid author; do
         elif [ "$tag" = "published" ]; then
             date_utc=$content
             if [ "$BSD_DATE" = "true" ]; then
-                date=$(date -j -f "%FT%T+00:00 %Z" "$date_utc UTC" "+$DATE_FMT")
+                date=$(date -jf "%FT%T+00:00 %Z" "$date_utc UTC" "+$DATE_FMT")
             else 
                 date=$(date -d "$date_utc" +"$DATE_FMT")
 			fi
@@ -101,6 +101,8 @@ while read chid author; do
     done < $feed_file | tail -n +2 >> $entries_file
     IFS=$ifs_prev
 done < $chids_file
+rm $chids_file
+rm -r $feeds_dir
 
 sort -t $'\t' -k 4 $entries_file -o $entries_file
 cut -f 1 $entries_file > $col_chid
@@ -115,9 +117,4 @@ mv ${col_title}_tr $col_title
 paste $COLS > $entries_file
 
 column -t -s $'\t' $entries_file
-
-# clean up
-rm $entries_file $chids_file
-rm $col_chid $col_author $col_title $col_date
-rm -r $feeds_dir
-[ -z "$(ls -A $TMP_DIR)" ] && rmdir $TMP_DIR
+rm -f $entries_file
