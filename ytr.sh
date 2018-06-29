@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-set -u
-
-# length and regex to channel ids
-CHID_LEN=24
-CHID_REGEX="^[a-zA-Z0-9\_-]{$CHID_LEN}$"
-
-# start of urls to rss feeds with recent videos
-FEED_URL="https://www.youtube.com/feeds/videos.xml?channel_id="
 
 TMP_DIR="/tmp/ytr"
 CFG_DIR="$HOME/.config/ytrecent"
@@ -39,82 +31,121 @@ TITLE_LEN=70
 # load user settings
 [ -r $CFG_FILE ] && source $CFG_FILE
 
-if [ ! -r $CHID_FILE ]; then
-    echo "error: no file with channel IDs found at $CHID_FILE"
-    exit 1;
-fi
+set -u
 
-if [ "$RECODE" = "true" -a ! -x "$(command -v recode)" ]; then
-    echo "warning: 'recode' not installed, HTML encodings will remain" 1>&2
-    RECODE=false
-fi
+USAGE="Usage: $0 options"
 
-if date -v 1d > /dev/null 2>&1;
-then BSD_DATE=true
-else BSD_DATE=false
-fi
+# length and regex to channel ids
+CHID_LEN=24
+CHID_REGEX="^[a-zA-Z0-9\_-]{$CHID_LEN}$"
 
-# make sure dirs exist
-mkdir -p $TMP_DIR || exit 1
-mkdir -p $feeds_dir || exit 1
-# empty entries file
-rm -f $entries_file || exit 1
+# start of urls to rss feeds with recent videos
+FEED_URL="https://www.youtube.com/feeds/videos.xml?channel_id="
 
-# rm comments from CHID_FILE
-sed 's:#.*$::g;/^\-*$/d' $CHID_FILE > ${chids_file}_stripped
-# rm invalid chids
-while read chid author; do
-    if echo $chid | grep -q -E $CHID_REGEX;
-    then echo "$chid $author"
-    else echo "warning: invalid channel id -- $chid" 1>&2
+fetch=false
+list=false
+clean=false
+
+while getopts flc flag; do
+    case "$flag" in
+        f) fetch=true;;
+        l) list=true;;
+        c) clean=true;;
+        [?])
+            echo $USAGE 1>&2 
+            exit 1;;
+	esac
+done
+
+if [ "$fetch" = "true" ]; then
+    if [ "$RECODE" = "true" -a ! -x "$(command -v recode)" ]; then
+        echo "warning: 'recode' not installed, HTML encodings will remain" 1>&2
+        RECODE=false
     fi
-done < ${chids_file}_stripped > $chids_file
-rm ${chids_file}_stripped
 
-# fetch rss feeds
-curl -s $(while read chid author; do
-    printf '%s%s -o %s/%s ' "$FEED_URL" "$chid" "$feeds_dir" "$chid"
-done < $chids_file)
+    if date -v 1d > /dev/null 2>&1;
+    then BSD_DATE=true
+    else BSD_DATE=false
+    fi
 
-# parse channels
-while read chid author; do
-    feed_file=$feeds_dir/$chid
+    mkdir -p $TMP_DIR || exit 1
+    mkdir -p $feeds_dir || exit 1
+    rm -f $entries_file || exit 1
 
-    # parse videos from channel
-    ifs_prev=$IFS
-    IFS=\>
-    while read -d \< tag content; do
-        if [ "$tag" = "yt:videoId" ]; then
-            printf "%s\t" "$content"
-        elif [ "$tag" = "title" ]; then
-            title=$content
-            printf "%s\t%s\t" "$author" "$title"
-        elif [ "$tag" = "published" ]; then
-            date_utc=$content
-            if [ "$BSD_DATE" = "true" ]; then
-                date=$(date -jf "%FT%T+00:00 %Z" "$date_utc UTC" "+$DATE_FMT")
-            else 
-                date=$(date -d "$date_utc" +"$DATE_FMT")
-			fi
-            printf "%s\t%s\n" "$date_utc" "$date"
+    if [ ! -r $CHID_FILE ]; then
+        echo "error: no file with channel IDs found at $CHID_FILE" 1>&2
+        exit 1;
+    fi
+
+    # rm comments from CHID_FILE
+    sed 's:#.*$::g;/^\-*$/d' $CHID_FILE > ${chids_file}_stripped
+    # rm invalid chids
+    while read chid author; do
+        if echo $chid | grep -q -E $CHID_REGEX;
+        then echo "$chid $author"
+        else echo "warning: invalid channel id -- $chid" 1>&2
         fi
-    done < $feed_file | tail -n +2 >> $entries_file
-    IFS=$ifs_prev
-done < $chids_file
-rm $chids_file
-rm -r $feeds_dir
+    done < ${chids_file}_stripped > $chids_file
+    rm ${chids_file}_stripped
 
-sort -t $'\t' -k 4 $entries_file -o $entries_file
-cut -f 1 $entries_file > $col_chid
-cut -f 2 $entries_file > $col_author
-cut -f 3 $entries_file > $col_title
-cut -f 5 $entries_file > $col_date
+    # fetch rss feeds
+    curl -s $(while read chid author; do
+        printf '%s%s -o %s/%s ' "$FEED_URL" "$chid" "$feeds_dir" "$chid"
+    done < $chids_file)
 
-[ "$RECODE" = "true" ] && recode -f -q html..ascii $col_title
-cut -c1-$TITLE_LEN $col_title > ${col_title}_tr
-mv ${col_title}_tr $col_title
+    # parse channels
+    while read chid author; do
+        feed_file=$feeds_dir/$chid
 
-paste $COLS > $entries_file
+        # parse videos from channel
+        ifs_prev=$IFS
+        IFS=\>
+        while read -d \< tag content; do
+            if [ "$tag" = "yt:videoId" ]; then
+                printf "%s\t" "$content"
+            elif [ "$tag" = "title" ]; then
+                title=$content
+                printf "%s\t%s\t" "$author" "$title"
+            elif [ "$tag" = "published" ]; then
+                date_utc=$content
+                if [ "$BSD_DATE" = "true" ]; then
+                    date=$(date -jf "%FT%T+00:00 %Z" \
+                           "$date_utc UTC" "+$DATE_FMT")
+                else 
+                    date=$(date -d "$date_utc" +"$DATE_FMT")
+                fi
+                printf "%s\t%s\n" "$date_utc" "$date"
+            fi
+        done < $feed_file | tail -n +2 >> $entries_file
+        IFS=$ifs_prev
+    done < $chids_file
+    rm $chids_file
+    rm -r $feeds_dir
 
-column -t -s $'\t' $entries_file
-rm -f $entries_file
+    # sort, postprocess entries, place columns in separate files
+    sort -t $'\t' -k 4 $entries_file -o $entries_file
+    cut -f 1 $entries_file > $col_chid
+    cut -f 2 $entries_file > $col_author
+    cut -f 3 $entries_file > $col_title
+    cut -f 5 $entries_file > $col_date
+    [ "$RECODE" = "true" ] && recode -f -q html..ascii $col_title
+    cut -c1-$TITLE_LEN $col_title > ${col_title}_tr
+    mv ${col_title}_tr $col_title
+    rm -f $entries_file
+else
+    if [ ! -r $col_chid -o ! -r $col_author -o \
+         ! -r $col_title -o ! -r $col_date ]; then
+        echo "error: no cache found in $TMP_DIR"
+        exit 1
+    fi
+fi
+
+if [ "$list" = "true" ]; then
+    paste $COLS > $entries_file
+    column -t -s $'\t' $entries_file
+    rm -f $entries_file
+fi
+
+if [ "$clean" = "true" ]; then
+    rm -f $col_author $col_title $col_date $col_chid
+fi
