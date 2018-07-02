@@ -8,78 +8,17 @@ die() {
     exit 1
 }
 
-if [ -z "$XDG_CACHE_HOME" ];
-then CCH_DIR="$HOME/.cache/ytrecent"
-else CCH_DIR="$XDG_CACHE_HOME/ytrecent"
-fi
-if [ -z "$XDG_RUNTIME_DIR" ]; then
-    RNT_DIR="$CCH_DIR/runtime"
-    warn "XDG_RUNTIME_DIR not set, using $CCH_DIR as fallback"
-else
-    RNT_DIR="$XDG_RUNTIME_DIR/ytrecent"
-fi
-if [ -z "$XDG_CONFIG_HOME" ];
-then CFG_DIR="$HOME/.config/ytrecent"
-else CFG_DIR="$XDG_CONFIG_HOME/ytrecent"
-fi
-
-# channel id file format:
-# <channel1_id> <channel1_name>
-# <channel2_id> <channel2_name>
-#      :               :
-CHID_FILE="$CFG_DIR/channel_ids"
-CHIDS_TMP="$RNT_DIR/chids"
-ENTRIES_TMP="$RNT_DIR/entries"
-COL_ID=$CCH_DIR/col_id
-COL_AUTHOR=$CCH_DIR/col_author
-COL_TITLE=$CCH_DIR/col_title
-COL_DATE=$CCH_DIR/col_date
-
-# format of date output, will be used for sorting
-DATE_FMT="%a %e %b"
-# truncate titles longer than below
-TITLE_LEN=70
-
-USAGE="Usage: $0 action... [-r]"
-
-# regex to channel ids
-CHID_REGEX="^[a-zA-Z0-9\_-]{24}$"
-# start of urls to rss feeds with recent videos
-FEED_URL="https://www.youtube.com/feeds/videos.xml?channel_id="
-
-fetch=false
-list=false
-clean=false
-recode=false
-cols="$COL_AUTHOR $COL_TITLE $COL_DATE $COL_ID"
-
-while getopts frlch flag; do
-    case "$flag" in
-        f) fetch=true;;
-        r) recode=true;;
-        l) list=true;;
-        c) clean=true;;
-        h) echo "$USAGE"; exit 0;;
-        [?]) echo "$USAGE"; exit 1;;
-	esac
-done
-shift $((OPTIND-1))
-
-if [ "$fetch" = "false" -a "$list" = "false" -a "$clean" = "false" ]; then
-    die "no action specified" "\n$USAGE"
-fi
-
-if [ -n "$1" ]; then
-    die "excess arguments" "\n$USAGE"
-fi
-
-set -u
-
-if [ "$fetch" = "true" ]; then
-    if [ "$recode" = "true" -a ! -x "$(command -v recode)" ]; then
-        warn "'recode' not installed, HTML encodings will remain"
-        recode=false
-    fi
+fetch() {
+    USAGE="usage: $0 fetch [-l] [-r]"
+    list=false
+    while getopts :rl flag; do
+        case "$flag" in
+            l) list=true;;
+            [?]) die "invalid flag -- $OPTARG"
+        esac
+    done
+    shift $((OPTIND-1))
+    [ -n "$1" ] && die "excess arguments" "\n$USAGE"
 
     if date -v 1d > /dev/null 2>&1;
     then BSD_DATE=true
@@ -111,6 +50,7 @@ if [ "$fetch" = "true" ]; then
     curl -s $(while read chid author; do
         printf '%s%s -o %s/%s ' "$FEED_URL" "$chid" "$FEEDS_DIR" "$chid"
     done < $CHIDS_TMP)
+    [ $? -ne 0 ] && die "unable to fetch videos, connection failed"
 
     # parse channels
     while read chid author; do
@@ -138,30 +78,128 @@ if [ "$fetch" = "true" ]; then
     rm $CHIDS_TMP
     rm -r $FEEDS_DIR
 
-    # sort, postprocess, place columns in separate files
+    # sort, place columns in separate files, postprocess
     sort -t $'\t' -k 4 $ENTRIES_TMP -o $ENTRIES_TMP
     cut -f 1 $ENTRIES_TMP > $COL_ID
     cut -f 2 $ENTRIES_TMP > $COL_AUTHOR
     cut -f 3 $ENTRIES_TMP > $COL_TITLE
     cut -f 5 $ENTRIES_TMP > $COL_DATE
-    [ "$recode" = "true" ] && recode -f -q html..ascii $COL_TITLE
+    # replace html entities
+    sed "s/&nbsp;/ /g;
+        s/&amp;/\&/g;
+        s/&lt;/\</g;
+        s/&gt;/\>/g;
+        s/&quot;/\"/g;
+        s/&ldquo;/\"/g;
+        s/&rdquo;/\"/g;" $COL_TITLE > ${COL_TITLE}_rc
+    mv ${COL_TITLE}_rc $COL_TITLE
     cut -c1-$TITLE_LEN $COL_TITLE > ${COL_TITLE}_tr
     mv ${COL_TITLE}_tr $COL_TITLE
     rm -rf $RNT_DIR
-else
-    if [ ! -r $COL_ID -o ! -r $COL_AUTHOR -o \
-         ! -r $COL_TITLE -o ! -r $COL_DATE ]; then
-        die "no cache found in $CCH_DIR"
-    fi
-fi
+    cache_available=true
+    cache_count=$(wc -l < $COL_ID)
+    [ "$list" = "true" ] && list
+}
+list() {
+    USAGE="usage: $0 list"
+    [ -n "$1" ] && die "excess arguments" "\n$USAGE"
+    [ "$cache_available" = "false" ] && die "no video list found in $CCH_DIR"
 
-if [ "$list" = "true" ]; then
+    cols="$COL_NUM $COL_AUTHOR $COL_TITLE $COL_DATE"
     mkdir -p $RNT_DIR
+    pad=$(expr $(echo $cache_count | wc -c) - 1)
+    echo $len 1>&2
+    rm -f $COL_NUM
+    for i in $(seq $cache_count -1 1); do
+        printf "[%${pad}s]\n" "$i" >> $COL_NUM
+    done
+
     paste $cols > $ENTRIES_TMP
     column -t -s $'\t' $ENTRIES_TMP
     rm -rf $RNT_DIR
+}
+watch() {
+    USAGE="usage: $0 watch video_number..."
+
+    [ "$cache_available" = "false" ] && die "no video list found in $CCH_DIR"
+    [ -z $1 ] && die "no video specifed" "\n$USAGE"
+    
+    for num in $@; do
+        if [ "1" -le "$num" -a "$num" -le "$cache_count" ] 2>/dev/null; then
+            lineno=$(expr $cache_count - $num + 1)
+            video_id=$(sed "${lineno}q;d" $COL_ID) # pick out specific line
+            video_url=$VIDEO_URL$video_id
+            mpv $video_url
+        else
+            die "invalid video number -- $num" "\n$USAGE"
+        fi
+    done
+}
+clean() {
+    rm -f $COL_AUTHOR $COL_TITLE $COL_DATE $COL_ID
+}
+
+if [ -z "$XDG_CACHE_HOME" ];
+then CCH_DIR="$HOME/.cache/ytrecent"
+else CCH_DIR="$XDG_CACHE_HOME/ytrecent"
+fi
+if [ -z "$XDG_RUNTIME_DIR" ]; then
+    RNT_DIR="$CCH_DIR/runtime"
+    warn "XDG_RUNTIME_DIR not set, using $CCH_DIR as fallback"
+else
+    RNT_DIR="$XDG_RUNTIME_DIR/ytrecent"
+fi
+if [ -z "$XDG_CONFIG_HOME" ];
+then CFG_DIR="$HOME/.config/ytrecent"
+else CFG_DIR="$XDG_CONFIG_HOME/ytrecent"
 fi
 
-if [ "$clean" = "true" ]; then
-    rm -f $COL_AUTHOR $COL_TITLE $COL_DATE $COL_ID
+# channel id file format:
+# <channel1_id> <channel1_name>
+# <channel2_id> <channel2_name>
+#      :               :
+CHID_FILE="$CFG_DIR/channel_ids"
+CHIDS_TMP="$RNT_DIR/chids"
+ENTRIES_TMP="$RNT_DIR/entries"
+COL_NUM=$RNT_DIR/col_num
+COL_ID=$CCH_DIR/col_id
+COL_AUTHOR=$CCH_DIR/col_author
+COL_TITLE=$CCH_DIR/col_title
+COL_DATE=$CCH_DIR/col_date
+
+# format of date output, will be used for sorting
+DATE_FMT="%a %e %b"
+# truncate titles longer than below
+TITLE_LEN=70
+
+USAGE="usage: $0 action [option]..."
+
+# regex to channel ids
+CHID_REGEX="^[a-zA-Z0-9\_-]{24}$"
+# start of urls to rss feeds with recent videos
+FEED_URL="https://www.youtube.com/feeds/videos.xml?channel_id="
+VIDEO_URL="https://www.youtube.com/watch?v="
+
+operation=$1
+shift
+
+if [ -z "$operation" ]; then
+    die "no action specified" "\n$USAGE"
 fi
+
+if [ -r $COL_ID -a -r $COL_AUTHOR -a -r $COL_TITLE -a -r $COL_DATE ]
+then
+    cache_available=true
+    cache_count=$(wc -l < $COL_ID)
+else
+    cache_available=false
+fi
+
+case $operation in
+    fetch) fetch $@;;
+    list) list $@;;
+    watch) watch $@;;
+    *) die "invalid operation -- $operation";;
+esac
+
+exit 0
