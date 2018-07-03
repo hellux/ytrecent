@@ -1,0 +1,39 @@
+#compdef ytr
+
+if (( CURRENT == 2 )); then
+    _values "commands" \
+        'fetch[fetch list of videos from channels]' \
+        'list[display fetched list of videos]' \
+        'watch[play videos]' \
+        'clean[clear cached list of videos]' \
+        'help[show help message]'
+elif (( CURRENT == 3 )); then
+    case "$words[2]" in
+        fetch)
+            _values "options" \
+                '-l[display fetched list of videos]'
+            ;;
+        list)
+            _values "columns" \
+                '-n[video number, zero padded]' \
+                '-N[video number, space padded in brackets]' \
+                '-a[video author]' \
+                '-t[video title]' \
+                '-T[video title, truncated]' \
+                '-d[video publish date, UTC]' \
+                '-D[video publish date, formatted & local]' \
+                '-i[youtube video id]'
+            ;;
+        watch)
+            local -a videos
+            local IFS='  '
+            while read num desc; do
+                # escape colons: '['->'\[', ']'->'\]'
+                videos=( ${videos[@]} "$(printf "%s:%s" "${num}" "$desc")" )
+            done <<< $(ytr list -nat | sed 's/:/\\:/g')
+            _describe -V 'videos' videos
+            ;;
+    esac
+fi
+
+# vim: set et sw=2 ts=2 ft=zsh: 
