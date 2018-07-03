@@ -79,7 +79,7 @@ fetch_cmd() {
     mv ${COL_TITLE}_rc $COL_TITLE
     rm -rf $RNT_DIR
 
-    [ "$list" = "true" ] && list
+    [ "$list" = "true" ] && list_cmd
 }
 list_cmd() {
     COLS_DEF="NaTD"
@@ -94,12 +94,12 @@ list_cmd() {
             d) cols="$cols $COL_DATE";;
             D) cols="$cols $COL_DATE_FMT";;
             i) cols="$cols $COL_ID";;
-            [?]) die "invalid flag -- $OPTARG"
+            [?]) die "invalid column -- $OPTARG"
         esac
     done
     shift $((OPTIND-1))
-    [ -n "$1" ] && die "excess arguments" "\n\n$USAGE_FETCH"
-    [ -z "$cols" ] && list -$COLS_DEF && exit 0;
+    [ -n "$1" ] && die "excess arguments" "\n\n$USAGE_LIST"
+    [ -z "$cols" ] && list_cmd -$COLS_DEF && exit 0;
     [ "$cache_available" = "false" ] && die "no video list found in $CCH_DIR"
 
     mkdir -p $RNT_DIR
@@ -207,22 +207,22 @@ COL_NUM_PAD=$RNT_DIR/col_num_pad
 COL_TITLE_TR=$RNT_DIR/col_title_tr
 COL_DATE_FMT=$RNT_DIR/col_date_fmt
 
-USAGE="usage: $0 <command> [<args>]
+USAGE="usage: ytr <command> [<args>]
 
 commands:
     fetch   -- fetch list of videos from channels to a cache
     list    -- display cached list of videos
     watch   -- play videos
     clean   -- clear cached list of videos"
-USAGE_FETCH="usage: $0 fetch [-l]"
+USAGE_FETCH="usage: ytr fetch [-l]"
 
-USAGE_WATCH="usage: $0 watch <video_numbers>
+USAGE_WATCH="usage: ytr watch <video_numbers>
 
 examples:
-    play most recent video: $0 watch 1
-    play three videos in specific order: $0 watch 12 7 8"
+    play most recent video: ytr watch 1
+    play three videos in specific order: ytr watch 12 7 8"
 
-USAGE_LIST="usage: $0 list [-<columns>]
+USAGE_LIST="usage: ytr list [-<columns>]
 
 columns:
     n -- video number, zero padded
@@ -235,8 +235,8 @@ columns:
     i -- youtube video id
 
 examples:
-    default listing: $0 list or $0 list -$COLS_DEF
-    list only full titles: $0 list -t"
+    default listing: ytr list or ytr list -$COLS_DEF
+    list only full titles: ytr list -t"
 
 command=$1
 shift
