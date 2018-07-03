@@ -104,8 +104,7 @@ list_cmd() {
 
     mkdir -p $RNT_DIR
     # truncate titles
-    TITLE_LEN=90
-    cut -c1-$TITLE_LEN $COL_TITLE > $COL_TITLE_TR
+    cut -c1-$YTR_TITLE_LEN $COL_TITLE > $COL_TITLE_TR
     # attach numbers to videos
     pad=$(expr $(echo $cache_count | wc -c) - 1) # max width of video number
     for num in $(seq $cache_count -1 1); do
@@ -119,7 +118,7 @@ list_cmd() {
     done < $COL_NUM > $COL_NUM_PAD
         
     # format date
-    DATE_FMT="%a %e %b"
+    DATE_FMT="%a %e %b %R"
     if date -v 1d > /dev/null 2>&1;
     then BSD_DATE=true
     else BSD_DATE=false
@@ -146,7 +145,7 @@ watch_cmd() {
             lineno=$(expr $cache_count - $num + 1)
             video_id=$(sed "${lineno}q;d" $COL_ID) # pick out specific line
             video_url=$VIDEO_URL$video_id
-            mpv $video_url
+            $YTR_PLAYER $video_url
         else
             die "invalid video number -- $num" "\n\n$USAGE_WATCH"
         fi
@@ -188,6 +187,9 @@ then CFG_DIR="$HOME/.config/ytrecent"
 else CFG_DIR="$XDG_CONFIG_HOME/ytrecent"
 fi
 
+[ -z "$YTR_PLAYER" ] && YTR_PLAYER=mpv
+[ -z "$YTR_TITLE_LEN" ] && YTR_TITLE_LEN=80
+
 # channel id file format:
 # <channel1_id> <channel1_name>
 # <channel2_id> <channel2_name>
@@ -213,7 +215,8 @@ commands:
     fetch   -- fetch list of videos from channels to a cache
     list    -- display cached list of videos
     watch   -- play videos
-    clean   -- clear cached list of videos"
+    clean   -- clear cached list of videos
+    help    -- show help message"
 USAGE_FETCH="usage: ytr fetch [-l]"
 
 USAGE_WATCH="usage: ytr watch <video_numbers>
