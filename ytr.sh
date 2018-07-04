@@ -61,18 +61,18 @@ COL_DATE_FMT=$RNT_DIR/col_date_fmt
 USAGE="usage: ytr <command> [<args>]
 
 commands:
-    fetch   -- fetch list of recent videos from channels to local cache
+    sync    -- fetch list of recent videos from channels and update cache
     list    -- display cached list of videos
-    watch   -- watch videos via external player
+    play    -- play videos via external player
     clean   -- clear cached list of videos
     help    -- show help message"
-USAGE_FETCH="usage: ytr fetch [-l]"
+USAGE_UPDATE="usage: ytr sync"
 
-USAGE_LIST="usage: ytr list [-f] [-s <days>] [<columns>]
+USAGE_LIST="usage: ytr list [-s] [-d <days>] [<columns>]
 
 options:
-    -f          --  fetch recent videos to cache before listing
-    -s<days>    --  specify age of videos to list, in days
+    -s          --  sync cache before listing
+    -d<days>    --  show videos newer than <days>
 
 columns:
     n -- video number, zero padded
@@ -87,24 +87,21 @@ columns:
 examples:
     default listing: ytr list or ytr list -$YTR_COLS
     list only full titles: ytr list -t
-    list videos published the last week: ytr list -s7"
+    list videos published the last week in cache: ytr list -d7
+    sync cache and list videos from this week: ytr list -sd7"
 
-USAGE_WATCH="usage: ytr watch <video_numbers>
+USAGE_WATCH="usage: ytr play <video_numbers>
 
 examples:
-    play most recent video: ytr watch 1
-    play three videos in specific order: ytr watch 12 7 8"
+    play most recent video: ytr play 1
+    play three videos in specific order: ytr play 12 7 8"
 
-fetch_cmd() {
-    list=false
-    while getopts :ls: flag; do
-        case "$flag" in
-            l) list=true;;
-            [?]) die "invalid flag -- $OPTARG"
-        esac
-    done
-    shift $((OPTIND-1))
-    [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_FETCH"
+USAGE_CLEAN="usage: ytr clean"
+
+USAGE_HELP="usage: ytr help"
+
+sync_cmd() {
+    [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_UPDATE"
     [ ! -r $CHID_FILE ] && die "no file with channel IDs found at $CHID_FILE"
 
     mkdir -p $CCH_DIR || exit 1
@@ -166,17 +163,15 @@ fetch_cmd() {
         s/&rdquo;/\"/g;" $COL_TITLE > ${COL_TITLE}_rc
     mv ${COL_TITLE}_rc $COL_TITLE
     rm -rf $RNT_DIR
-
-    [ "$list" = "true" ] && list_cmd
 }
 
 list_cmd() {
-    fetch=false
-    sinced=$YTR_SINCE_DAYS
-    while getopts :fs: flag; do
+    sync=false
+    days=$YTR_SINCE_DAYS
+    while getopts :sd: flag; do
         case "$flag" in
-            f) fetch=true;;
-            s) sinced="$OPTARG";;
+            s) sync=true;;
+            d) days="$OPTARG";;
             [?]) die "invalid flag -- $OPTARG"
         esac
     done
@@ -185,8 +180,8 @@ list_cmd() {
     shift
     [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_LIST"
     [ -z "$colstr" ] && colstr=$YTR_COLS
-    [ "$sinced" -gt 0 ] 2>/dev/null || die "invalid day count -- $sinced"
-    [ "$fetch" = "true" ] && fetch_cmd
+    [ "$days" -gt 0 ] 2>/dev/null || die "invalid day count -- $days"
+    [ "$sync" = "true" ] && sync_cmd
     [ "$cache_available" = "false" ] && die "no video list found in $CCH_DIR"
 
     cols=""
@@ -205,7 +200,7 @@ list_cmd() {
         esac
     done
 
-    since=$(expr "$(date +%s)" - \( 86400 \* $sinced \))
+    since=$(expr "$(date +%s)" - \( 86400 \* $days \))
     video_count="0"
     while read date_utc; do
         date=$(date_utc_fmt "$date_utc" "%s")
@@ -240,7 +235,7 @@ list_cmd() {
     rm -rf $RNT_DIR
 }
 
-watch_cmd() {
+play_cmd() {
     VIDEO_URL="https://www.youtube.com/watch?v="
 
     [ "$cache_available" = "false" ] && die "no video list found in $CCH_DIR"
@@ -257,25 +252,28 @@ watch_cmd() {
 }
 
 clean_cmd() {
+    [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_CLEAN"
     rm -rf $CCH_DIR
 }
 
 help_cmd() {
+    [ -n "$1" ] && warn "excess arguments -- $@" "\n\n$USAGE_HELP"
+
     echo "ytrecent -- YouTube channel tracker"
     echo -e "\n$USAGE"
     echo -e "\ndescription:
-    ytr -- "YouTube recent" -- is a utility for keeping up with YouTube
-    channels from the command line. It serves a similar purpose to YouTube
-    subscriptions, but no YouTube account is required. Channels are specified
-    in $CHID_FILE with the following format:
+    ytr is a utility for keeping up with YouTube channels from the command
+    line. It serves a similar purpose to YouTube subscriptions, but no YouTube
+    account is required. Channels are specified in $CHID_FILE with the
+    following format:
         <channel1 id> <name1>
         <channel2 id> <name2>
              :           :
-    'ytr fetch' then parses these IDs and fetches RSS feeds from youtube.com
-    which contain links to the most recent 15 videos of the corresponding
-    channel. Videos are then sorted by date of publish and displayed with 'ytr
-    list'. 'ytr watch' can be used to play these videos immediately through an
-    external video player or web browser."
+    'ytr sync' then parses these IDs and fetches RSS feeds from youtube.com
+    which contain links to the 15 most recent videos from each channel. Videos
+    are then sorted by date of publish and displayed with 'ytr list'. 'ytr
+    play' can be used to play these videos immediately through an external
+    video player or web browser."
 }
 
 command=$1
@@ -293,9 +291,9 @@ else
 fi
  
 case $command in
-    fetch) fetch_cmd "$@";;
+    sync) sync_cmd "$@";;
     list) list_cmd "$@";;
-    watch) watch_cmd "$@";;
+    play) play_cmd "$@";;
     clean) clean_cmd "$@";;
     help) help_cmd "$@";;
     *) die "invalid command -- $command";;

@@ -1,20 +1,20 @@
 #compdef ytr
 
 if (( CURRENT == 2 )); then
-    _values "commands" \
-        'fetch[fetch list of videos from channels]' \
-        'list[display fetched list of videos]' \
-        'watch[play videos]' \
+    _values "command" \
+        'sync[fetch list of recent videos from channels and update cache]' \
+        'list[show cached list of videos]' \
+        'play[play videos via external player ]' \
         'clean[clear cached list of videos]' \
         'help[show help message]'
 elif (( CURRENT == 3 )); then
     case "$words[2]" in
-        fetch)
-            _values "options" \
-                '-l[display fetched list of videos]'
-            ;;
         list)
-            _values "columns" \
+            # TODO get _arguments to work for options
+            _values "option" \
+                '-s[update cache before listing]' \
+                '-d[show videos newer than <days>]'
+            _values "column" \
                 '-n[video number, zero padded]' \
                 '-N[video number, space padded in brackets]' \
                 '-a[video author]' \
@@ -24,13 +24,13 @@ elif (( CURRENT == 3 )); then
                 '-D[video publish date, formatted & local]' \
                 '-i[youtube video id]'
             ;;
-        watch)
+        play)
             local -a videos
             local IFS='  '
             while read num desc; do
                 videos=( ${videos[@]} "$(printf "%s:%s" "${num}" "$desc")" )
-            done <<< $(ytr list -nat | sed 's/:/\\:/g')
-            _describe -V 'videos' videos
+            done <<< $(ytr list nat | sed 's/:/\\:/g')
+            _describe -V 'video' videos
             ;;
     esac
 fi
