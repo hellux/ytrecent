@@ -274,6 +274,18 @@ help_cmd() {
     are then sorted by date of publish and displayed with 'ytr list'. 'ytr
     play' can be used to play these videos immediately through an external
     video player or web browser."
+    echo -e "\nenvironment variables:
+    YTR_PLAYER [$YTR_PLAYER]
+        command used to play videos $YTR_PLAYER, ytr will call the player
+        with the video url as argument
+    YTR_TITLE_LEN [$YTR_TITLE_LEN]
+        length titles will be truncated in T column for the list command
+    YTR_SINCE_DAYS [$YTR_SINCE_DAYS]
+        fallback value for list -d option
+    YTR_COLS [$YTR_COLS]
+        fallback column string for the command
+    YTR_DATE_FMT [$YTR_DATE_FMT]
+        format passed to 'date' for D column for the list command"
 }
 
 command=$1
