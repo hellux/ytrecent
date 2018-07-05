@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 
+# TODO POSIX compliance
+#   -replace 'read -d' for parsing
+
 warn() {
     echo -e "warning: $@" 1>&2
 }
 die() {
     echo -e "error: $@" 1>&2
     exit 1
+}
+contains() {
+    test "${2#*$1}" != "$2"
 }
 
 if date -v 1d > /dev/null 2>&1;
@@ -43,14 +49,15 @@ fi
 [ -z "$YTR_COLS" ] && YTR_COLS="NaTD"
 [ -z "$YTR_DATE_FMT" ] && YTR_DATE_FMT="%a %e %b %R"
 
+# user channels
 CHID_FILE=$CFG_DIR/channel_ids
 # cached videos
 ENTRIES=$CCH_DIR/entries
 # cached columns
 COL_ID=$CCH_DIR/col_id
 COL_AUTHOR=$CCH_DIR/col_author
-COL_TITLE=$CCH_DIR/col_title
-COL_DATE=$CCH_DIR/col_date
+COL_TITLE=$CCH_DIR/col_title_full
+COL_DATE=$CCH_DIR/col_date_utc
 # tmp postprocess columns
 COL_NUM=$RNT_DIR/col_num
 COL_NUM_ZERO=$RNT_DIR/col_num_zero
@@ -61,11 +68,11 @@ COL_DATE_FMT=$RNT_DIR/col_date_fmt
 USAGE="usage: ytr <command> [<args>]
 
 commands:
-    sync    -- fetch list of recent videos from channels and update cache
-    list    -- display cached list of videos
-    play    -- play videos via external player
-    clean   -- clear cached list of videos
-    help    -- show help message"
+    s sync    -- fetch list of recent videos from channels and update cache
+    l list    -- display cached list of videos
+    p play    -- play videos via external player
+    c clean   -- clear cached list of videos
+    h help    -- show help message"
 USAGE_UPDATE="usage: ytr sync"
 
 USAGE_LIST="usage: ytr list [-s] [-d <days>] [<columns>]
@@ -73,6 +80,8 @@ USAGE_LIST="usage: ytr list [-s] [-d <days>] [<columns>]
 options:
     -s          --  sync cache before listing
     -d<days>    --  show videos newer than <days>
+    -a          --  show all videos, overrides -d
+    -t          --  print entries with tabs as separators instead of a table
 
 columns:
     n -- video number, zero padded
@@ -168,10 +177,14 @@ sync_cmd() {
 list_cmd() {
     sync=false
     days=$YTR_SINCE_DAYS
-    while getopts :sd: flag; do
+    all=false
+    table=true
+    while getopts :sd:at flag; do
         case "$flag" in
             s) sync=true;;
             d) days="$OPTARG";;
+            a) all=true;;
+            t) table=false;;
             [?]) die "invalid flag -- $OPTARG"
         esac
     done
@@ -200,38 +213,52 @@ list_cmd() {
         esac
     done
 
-    since=$(expr "$(date +%s)" - \( 86400 \* $days \))
-    video_count="0"
-    while read date_utc; do
-        date=$(date_utc_fmt "$date_utc" "%s")
-        if [ $date -lt $since ]
-        then break
-        else video_count=$(expr $video_count + 1)
-        fi
-    done < $COL_DATE
+    if [ ! "$all" = "true" ]; then
+        since=$(expr "$(date +%s)" - \( 86400 \* $days \))
+        video_count="0"
+        while read date_utc; do
+            date=$(date_utc_fmt "$date_utc" "%s")
+            if [ $date -lt $since ]
+            then break
+            else video_count=$(expr $video_count + 1)
+            fi
+        done < $COL_DATE
+    else
+        video_count=$cache_count
+    fi
 
     mkdir -p $RNT_DIR
-    # truncate titles
-    cut -c1-$YTR_TITLE_LEN $COL_TITLE > $COL_TITLE_TR
-    # attach numbers to videos
-    pad=$(expr $(echo $video_count | wc -c) - 1) # max width of video number
-    for num in $(seq $video_count); do
-        printf "%d\n" "$num"
-    done > $COL_NUM
-    while read num; do
-        printf "%0${pad}d\n" "$num"
-    done < $COL_NUM > $COL_NUM_ZERO
-    while read num; do
-        printf "[%${pad}s]\n" "$num"
-    done < $COL_NUM > $COL_NUM_PAD
-        
-    # format date
-    while read date; do
-        date_utc_fmt "$date" "$YTR_DATE_FMT"
-    done <<< $(cat $COL_DATE | head -n $video_count) > $COL_DATE_FMT
+    if contains $COL_TITLE_TR "$cols"; then
+        cut -c1-$YTR_TITLE_LEN $COL_TITLE > $COL_TITLE_TR
+    fi
+    if contains $COL_NUM "$cols"; then
+        pad=$(expr $(echo $video_count | wc -c) - 1) # max width of video number
+        for num in $(seq $video_count); do
+            printf "%d\n" "$num"
+        done > $COL_NUM
+        if contains $COL_NUM_ZERO "$cols"; then
+            while read num; do
+                printf "%0${pad}d\n" "$num"
+            done < $COL_NUM > $COL_NUM_ZERO
+        fi
+        if contains $COL_NUM_PAD "$cols"; then
+            while read num; do
+                printf "[%${pad}s]\n" "$num"
+            done < $COL_NUM > $COL_NUM_PAD
+        fi
+    fi
+    if contains $COL_DATE_FMT "$cols"; then
+        while read date; do
+            date_utc_fmt "$date" "$YTR_DATE_FMT"
+        done <<< $(cat $COL_DATE | head -n $video_count) > $COL_DATE_FMT
+    fi
 
-    paste $cols | head -n $video_count | sed '1!G;h;$!d' > $RNT_DIR/colums
-    column -t -s $'\t' $RNT_DIR/colums
+    # merge column files, grab only recent entries, reverse order of entries
+    paste $cols | head -n $video_count | sed '1!G;h;$!d' > $RNT_DIR/columns
+    if [ "$table" = "true" ]
+    then column -t -s $'\t' $RNT_DIR/columns
+    else cat $RNT_DIR/columns
+    fi
     rm -rf $RNT_DIR
 }
 
@@ -303,11 +330,11 @@ else
 fi
  
 case $command in
-    sync) sync_cmd "$@";;
-    list) list_cmd "$@";;
-    play) play_cmd "$@";;
-    clean) clean_cmd "$@";;
-    help) help_cmd "$@";;
+    s|sync) sync_cmd "$@";;
+    l|list) list_cmd "$@";;
+    p|play) play_cmd "$@";;
+    c|clean) clean_cmd "$@";;
+    h|help) help_cmd "$@";;
     *) die "invalid command -- $command";;
 esac
 
