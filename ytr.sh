@@ -31,11 +31,9 @@ if [ -z "$XDG_CACHE_HOME" ];
 then CCH_DIR="$HOME/.cache/ytrecent"
 else CCH_DIR="$XDG_CACHE_HOME/ytrecent"
 fi
-if [ -z "$XDG_RUNTIME_DIR" ]; then
-    RNT_DIR="$CCH_DIR/runtime"
-    warn "XDG_RUNTIME_DIR not set, using $CCH_DIR as fallback"
-else
-    RNT_DIR="$XDG_RUNTIME_DIR/ytrecent"
+if [ -z "$XDG_RUNTIME_DIR" ];
+then RNT_DIR="$CCH_DIR/runtime"
+else RNT_DIR="$XDG_RUNTIME_DIR/ytrecent"
 fi
 if [ -z "$XDG_CONFIG_HOME" ];
 then CFG_DIR="$HOME/.config/ytrecent"
@@ -248,9 +246,9 @@ list_cmd() {
         fi
     fi
     if contains $COL_DATE_FMT "$cols"; then
-        while read date; do
+        head -n $video_count $COL_DATE | while read date; do
             date_utc_fmt "$date" "$YTR_DATE_FMT"
-        done <<< $(cat $COL_DATE | head -n $video_count) > $COL_DATE_FMT
+        done > $COL_DATE_FMT
     fi
 
     # merge column files, grab only recent entries, reverse order of entries
