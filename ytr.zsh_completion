@@ -7,22 +7,24 @@ if (( CURRENT == 2 )); then
         'play[play videos via external player ]' \
         'clean[clear cached list of videos]' \
         'help[show help message]'
-elif (( CURRENT == 3 )); then
+elif (( CURRENT >= 3 )); then
     case "$words[2]" in
         list)
             # TODO get _arguments to work for options
-            _values "option" \
+            _arguments -s : '3:' \
                 '-s[update cache before listing]' \
-                '-d[show videos newer than <days>]'
+                '-d[show videos newer than <days> old]:days' \
+                '-a[show all videos, overrides -d]' \
+                '-t[print entries with tabs as separators instead of a table]'
             _values "column" \
-                '-n[video number, zero padded]' \
-                '-N[video number, space padded in brackets]' \
-                '-a[video author]' \
-                '-t[video title]' \
-                '-T[video title, truncated]' \
-                '-d[video publish date, UTC]' \
-                '-D[video publish date, formatted & local]' \
-                '-i[youtube video id]'
+                'n[video number, zero padded]' \
+                'N[video number, space padded in brackets]' \
+                'a[video author]' \
+                't[video title]' \
+                'T[video title, truncated]' \
+                'd[video publish date, UTC]' \
+                'D[video publish date, formatted & local]' \
+                'i[youtube video id]'
             ;;
         play)
             local -a videos
