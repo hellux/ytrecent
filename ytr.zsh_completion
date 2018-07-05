@@ -26,10 +26,10 @@ elif (( CURRENT == 3 )); then
             ;;
         play)
             local -a videos
-            local IFS='  '
-            while read num desc; do
-                videos=( ${videos[@]} "$(printf "%s:%s" "${num}" "$desc")" )
-            done <<< $(ytr list nat | sed 's/:/\\:/g')
+            IFS=$'\t'
+            while read num author title; do
+                videos=( ${videos[@]} "$(printf "%s:%s, %s" "${num}" "$author" "$title")" )
+            done <<< $(ytr list -t nat | sed 's/:/\\:/g')
             _describe -V 'video' videos
             ;;
     esac
