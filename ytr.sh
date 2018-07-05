@@ -71,15 +71,43 @@ commands:
     p play    -- play videos via external player
     c clean   -- clear cached list of videos
     h help    -- show help message"
-USAGE_UPDATE="usage: ytr sync"
 
-USAGE_LIST="usage: ytr list [-s] [-d <days>] [<columns>]
+DESC="description:
+    ytr is a utility for keeping up with YouTube channels from the command
+    line. It serves a similar purpose to YouTube subscriptions, but no YouTube
+    account is required. Channels are specified in $CHID_FILE with the
+    following format:
+        <channel1 id> <name1>
+        <channel2 id> <name2>
+             :           :
+    'ytr sync' then parses these IDs and fetches RSS feeds from youtube.com
+    which contain links to the 15 most recent videos from each channel. Videos
+    are then sorted by date of publish and displayed with 'ytr list'. 'ytr
+    play' can be used to play these videos immediately through an external
+    video player or web browser."
+
+DESC_ENV="environment variables:
+    YTR_PLAYER [$YTR_PLAYER]
+        command used to play videos $YTR_PLAYER, ytr will call the player
+        with the video url as argument
+    YTR_TITLE_LEN [$YTR_TITLE_LEN]
+        length titles will be truncated in T column for the list command
+    YTR_SINCE_DAYS [$YTR_SINCE_DAYS]
+        fallback value for list -d option
+    YTR_COLS [$YTR_COLS]
+        fallback column string for the command
+    YTR_DATE_FMT [$YTR_DATE_FMT]
+        format passed to 'date' for D column for the list command"
+
+USAGE_SYNC="usage: ytr sync"
+
+USAGE_LIST="usage: ytr list [-sat] [-d <days>] [<columns>]
 
 options:
-    -s          --  sync cache before listing
-    -d<days>    --  show videos newer than <days>
-    -a          --  show all videos, overrides -d
-    -t          --  print entries with tabs as separators instead of a table
+    -s       --  sync cache before listing
+    -d<days> --  show videos newer than <days> days old
+    -a       --  show all videos, overrides -d
+    -t       --  print entries with tabs as separators instead of a table
 
 columns:
     n -- video number, zero padded
@@ -97,7 +125,7 @@ examples:
     list videos published the last week in cache: ytr list -d7
     sync cache and list videos from this week: ytr list -sd7"
 
-USAGE_WATCH="usage: ytr play <video_numbers>
+USAGE_PLAY="usage: ytr play <video_numbers>
 
 examples:
     play most recent video: ytr play 1
@@ -105,10 +133,10 @@ examples:
 
 USAGE_CLEAN="usage: ytr clean"
 
-USAGE_HELP="usage: ytr help"
+USAGE_HELP="usage: ytr help [<command>]"
 
 sync_cmd() {
-    [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_UPDATE"
+    [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_SYNC"
     [ ! -r $CHID_FILE ] && die "no file with channel IDs found at $CHID_FILE"
 
     mkdir -p $CCH_DIR || exit 1
@@ -261,17 +289,16 @@ list_cmd() {
 }
 
 play_cmd() {
-    VIDEO_URL="https://www.youtube.com/watch?v="
-
     [ "$cache_available" = "false" ] && die "no video list found in $CCH_DIR"
-    [ -z $1 ] && die "no video specifed" "\n\n$USAGE_WATCH"
+    [ -z $1 ] && die "no video specifed" "\n\n$USAGE_PLAY"
     
+    VIDEO_URL="https://www.youtube.com/watch?v="
     for num in $@; do
         if [ "1" -le "$num" -a "$num" -le "$cache_count" ] 2>/dev/null; then
-            video_id=$(sed "${num}q;d" $COL_ID) # pick out specific line
+            video_id=$(sed "${num}q;d" $COL_ID) # pick out line $num
             $YTR_PLAYER $VIDEO_URL$video_id
         else
-            die "invalid video number -- $num" "\n\n$USAGE_WATCH"
+            die "invalid video number -- $num" "\n\n$USAGE_PLAY"
         fi
     done
 }
@@ -282,35 +309,22 @@ clean_cmd() {
 }
 
 help_cmd() {
+    topic=$1
+    shift
     [ -n "$1" ] && warn "excess arguments -- $@" "\n\n$USAGE_HELP"
-
-    echo "ytrecent -- YouTube channel tracker"
-    echo -e "\n$USAGE"
-    echo -e "\ndescription:
-    ytr is a utility for keeping up with YouTube channels from the command
-    line. It serves a similar purpose to YouTube subscriptions, but no YouTube
-    account is required. Channels are specified in $CHID_FILE with the
-    following format:
-        <channel1 id> <name1>
-        <channel2 id> <name2>
-             :           :
-    'ytr sync' then parses these IDs and fetches RSS feeds from youtube.com
-    which contain links to the 15 most recent videos from each channel. Videos
-    are then sorted by date of publish and displayed with 'ytr list'. 'ytr
-    play' can be used to play these videos immediately through an external
-    video player or web browser."
-    echo -e "\nenvironment variables:
-    YTR_PLAYER [$YTR_PLAYER]
-        command used to play videos $YTR_PLAYER, ytr will call the player
-        with the video url as argument
-    YTR_TITLE_LEN [$YTR_TITLE_LEN]
-        length titles will be truncated in T column for the list command
-    YTR_SINCE_DAYS [$YTR_SINCE_DAYS]
-        fallback value for list -d option
-    YTR_COLS [$YTR_COLS]
-        fallback column string for the command
-    YTR_DATE_FMT [$YTR_DATE_FMT]
-        format passed to 'date' for D column for the list command"
+    if [ -n "$topic" ]; then
+        case $topic in
+            s|sync) echo "$USAGE_SYNC";;
+            l|list) echo "$USAGE_LIST";;
+            p|play) echo "$USAGE_PLAY";;
+            c|clean) echo "$USAGE_CLEAN";;
+            h|help) echo "$USAGE_HELP";;
+            *) die "invalid topic -- $topic"; help_cmd "help";;
+        esac
+    else
+        echo "ytrecent -- YouTube channel tracker"
+        echo -e "\n$USAGE\n\n$DESC\n\n$DESC_ENV"
+    fi
 }
 
 command=$1
