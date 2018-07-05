@@ -47,7 +47,7 @@ fi
 [ -z "$YTR_TITLE_LEN" ] && YTR_TITLE_LEN=80
 [ -z "$YTR_SINCE_DAYS" ] && YTR_SINCE_DAYS=30
 [ -z "$YTR_COLS" ] && YTR_COLS="NaTD"
-[ -z "$YTR_DATE_FMT" ] && YTR_DATE_FMT="%a %e %b %R"
+[ -z "$YTR_DATE_FMT" ] && YTR_DATE_FMT="%a %e %b %H:%M"
 
 # user channels
 CHID_FILE=$CFG_DIR/channel_ids
