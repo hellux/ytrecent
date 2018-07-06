@@ -47,6 +47,9 @@ fi
 [ -z "$YTR_COLS" ] && YTR_COLS="NaTD"
 [ -z "$YTR_DATE_FMT" ] && YTR_DATE_FMT="%a %e %b %H:%M"
 
+# URL prefixes
+VIDEO_URL="https://www.youtube.com/watch?v="
+FEED_URL="https://www.youtube.com/feeds/videos.xml?channel_id="
 # user channels
 CHID_FILE=$CFG_DIR/channel_ids
 # cached videos
@@ -57,6 +60,7 @@ COL_AUTHOR=$CCH_DIR/col_author
 COL_TITLE=$CCH_DIR/col_title_full
 COL_DATE=$CCH_DIR/col_date_utc
 # tmp postprocess columns
+COL_URL=$RNT_DIR/col_url
 COL_NUM=$RNT_DIR/col_num
 COL_NUM_ZERO=$RNT_DIR/col_num_zero
 COL_NUM_PAD=$RNT_DIR/col_num_pad
@@ -117,7 +121,8 @@ columns:
     T -- video title, truncated
     d -- video publish date
     D -- video publish date, formatted & local
-    i -- youtube video id
+    u -- youtube video id
+    U -- youtube video URL
 
 examples:
     default listing: ytr list or ytr list -$YTR_COLS
@@ -125,7 +130,10 @@ examples:
     list videos published the last week in cache: ytr list -d7
     sync cache and list videos from this week: ytr list -sd7"
 
-USAGE_PLAY="usage: ytr play <video_numbers>
+USAGE_PLAY="usage: ytr play [-p] <video_numbers>
+
+options:
+    -p -- print video URLs instead of playing
 
 examples:
     play most recent video: ytr play 1
@@ -154,7 +162,6 @@ sync_cmd() {
     done < $RNT_DIR/chids_stripped > $RNT_DIR/chids
 
     # fetch rss feeds
-    FEED_URL="https://www.youtube.com/feeds/videos.xml?channel_id="
     curl -m 1 -s $(while read chid author; do
         printf '%s%s -o %s/%s ' "$FEED_URL" "$chid" "$RNT_DIR" "$chid"
     done < $RNT_DIR/chids )
@@ -225,7 +232,7 @@ list_cmd() {
 
     cols=""
     OPTIND=1
-    while getopts :nNatTdDi col "-$colstr"; do
+    while getopts :nNatTdDuU col "-$colstr"; do
         case "$col" in
             n) cols="$cols $COL_NUM_ZERO";;
             N) cols="$cols $COL_NUM_PAD";;
@@ -234,7 +241,8 @@ list_cmd() {
             T) cols="$cols $COL_TITLE_TR";;
             d) cols="$cols $COL_DATE";;
             D) cols="$cols $COL_DATE_FMT";;
-            i) cols="$cols $COL_ID";;
+            u) cols="$cols $COL_ID";;
+            U) cols="$cols $COL_URL";;
             [?]) die "invalid column -- $OPTARG"
         esac
     done
@@ -254,6 +262,11 @@ list_cmd() {
     fi
 
     mkdir -p $RNT_DIR
+    if contains $COL_URL "$cols"; then
+        while read id; do
+            echo $VIDEO_URL$id
+        done < $COL_ID > $COL_URL
+    fi
     if contains $COL_TITLE_TR "$cols"; then
         cut -c1-$YTR_TITLE_LEN $COL_TITLE > $COL_TITLE_TR
     fi
@@ -289,10 +302,16 @@ list_cmd() {
 }
 
 play_cmd() {
-    [ "$cache_available" = "false" ] && die "no video list found in $CCH_DIR"
+    while getopts :p flag; do
+        case "$flag" in
+            p) YTR_PLAYER="echo";;
+            [?]) die "invalid flag -- $OPTARG"
+        esac
+    done
+    shift $((OPTIND-1))
     [ -z $1 ] && die "no video specifed" "\n\n$USAGE_PLAY"
+    [ "$cache_available" = "false" ] && die "no video list found in $CCH_DIR"
     
-    VIDEO_URL="https://www.youtube.com/watch?v="
     for num in $@; do
         if [ "1" -le "$num" -a "$num" -le "$cache_count" ] 2>/dev/null; then
             video_id=$(sed "${num}q;d" $COL_ID) # pick out line $num

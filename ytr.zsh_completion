@@ -27,6 +27,8 @@ elif (( CURRENT >= 3 )); then
                 'i[youtube video id]'
             ;;
         play)
+            _arguments : '3:' \
+                '-p[print video URLs instead of playing]'
             local -a videos
             IFS=$'\t'
             while read num author title; do
