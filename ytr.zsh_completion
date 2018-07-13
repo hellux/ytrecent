@@ -9,8 +9,12 @@ if (( CURRENT == 2 )); then
         'help[show help message]'
 elif (( CURRENT >= 3 )); then
     case "$words[2]" in
-        list)
-            # TODO get _arguments to work for options
+        s|sync)
+            _arguments : '3:' \
+                '-q[do not print anything]' \
+                '-v[be verbose]'
+            ;;
+        l|list)
             _arguments -s : '3:' \
                 '-s[update cache before listing]' \
                 '-d[show videos newer than <days> old]:days' \
@@ -26,7 +30,7 @@ elif (( CURRENT >= 3 )); then
                 'D[video publish date, formatted & local]' \
                 'i[youtube video id]'
             ;;
-        play)
+        p|play)
             _arguments : '3:' \
                 '-p[print video URLs instead of playing]'
             local -a videos

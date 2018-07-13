@@ -79,8 +79,8 @@ commands:
 DESC="description:
     ytr is a utility for keeping up with YouTube channels from the command
     line. It serves a similar purpose to YouTube subscriptions, but no YouTube
-    account is required. Channels are specified in $CHID_FILE with the
-    following format:
+    account is required. Channels are specified in $CHID_FILE
+    with the following format:
         <channel1 id> <name1>
         <channel2 id> <name2>
              :           :
@@ -144,8 +144,21 @@ USAGE_CLEAN="usage: ytr clean"
 USAGE_HELP="usage: ytr help [<command>]"
 
 sync_cmd() {
+    quiet=false
+    verbose=false
+    OPTIND=1
+    while getopts :qv flag; do
+        case "$flag" in
+            q) quiet=true;;
+            v) verbose=true;;
+            [?]) die "invalid flag -- $OPTARG"
+        esac
+    done
+    shift $((OPTIND-1))
+
     [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_SYNC"
     [ ! -r $CHID_FILE ] && die "no file with channel IDs found at $CHID_FILE"
+    [ "$quiet" = "true" ] && verbose=false
 
     mkdir -p $CCH_DIR || exit 1
     mkdir -p $RNT_DIR || exit 1
@@ -162,14 +175,18 @@ sync_cmd() {
     done < $RNT_DIR/chids_stripped > $RNT_DIR/chids
 
     # fetch rss feeds
-    curl -m 1 -s $(while read chid author; do
+    curl_args="-m1"
+    [ "$verbose" = "false" ] && curl_args="$curl_args -s"
+    curl $curl_args $(while read chid author; do
         printf '%s%s -o %s/%s ' "$FEED_URL" "$chid" "$RNT_DIR" "$chid"
     done < $RNT_DIR/chids )
     ec=$?
     [ $ec -ne 0 ] && die "fetch failed -- curl exit code $ec"
 
+    [ "$quiet" = "false" ] && prev_count=$(wc -l < $ENTRIES)
     # parse videos from channel feeds
     while read chid author; do
+        [ "$verbose" = "true" ] && echo "Parsing videos from $author..."
         feed_file=$RNT_DIR/$chid
 
         # remove header
@@ -205,6 +222,12 @@ sync_cmd() {
         s/&rdquo;/\"/g;" $COL_TITLE > ${COL_TITLE}_rc
     mv ${COL_TITLE}_rc $COL_TITLE
     rm -rf $RNT_DIR
+
+    if [ "$quiet" = "false" ]; then
+        curr_count=$(wc -l < $ENTRIES)
+        diff_count=$(expr $curr_count - $prev_count)
+        echo "$diff_count new video(s) found."
+    fi
 }
 
 list_cmd() {
@@ -212,6 +235,7 @@ list_cmd() {
     days=$YTR_SINCE_DAYS
     all=false
     table=true
+    OPTIND=1
     while getopts :sd:at flag; do
         case "$flag" in
             s) sync=true;;
@@ -227,7 +251,7 @@ list_cmd() {
     [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_LIST"
     [ -z "$colstr" ] && colstr=$YTR_COLS
     [ "$days" -gt 0 ] 2>/dev/null || die "invalid day count -- $days"
-    [ "$sync" = "true" ] && sync_cmd
+    [ "$sync" = "true" ] && sync_cmd -q
     [ "$cache_available" = "false" ] && die "no video list found in $CCH_DIR"
 
     cols=""
@@ -302,6 +326,7 @@ list_cmd() {
 }
 
 play_cmd() {
+    OPTIND=1
     while getopts :p flag; do
         case "$flag" in
             p) YTR_PLAYER="echo";;
@@ -338,7 +363,7 @@ help_cmd() {
             p|play) echo "$USAGE_PLAY";;
             c|clean) echo "$USAGE_CLEAN";;
             h|help) echo "$USAGE_HELP";;
-            *) die "invalid topic -- $topic"; help_cmd "help";;
+            *) warn "invalid topic -- $topic"; help_cmd "help";;
         esac
     else
         echo "ytrecent -- YouTube channel tracker"
