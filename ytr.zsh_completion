@@ -2,17 +2,29 @@
 
 if (( CURRENT == 2 )); then
     _values "command" \
-        'sync[fetch list of recent videos from channels and update cache]' \
+        'channel[handle channels to follow]' \
+        'sync[fetch list of recent videos from channels]' \
         'list[show cached list of videos]' \
         'play[play videos via external player ]' \
-        'clean[clear cached list of videos]' \
         'help[show help message]'
 elif (( CURRENT >= 3 )); then
     case "$words[2]" in
+        c|ch|channel)
+            if (( CURRENT == 3 )); then
+                _values "command" \
+                    'add[add channel to follow]' \
+                    'remove[remove channel]' \
+                    'list[show followed channels]'
+            fi
+            case "$words[3]" in
+                rm|remove) _values "channel" $(ytr channel list);;
+            esac
+            ;;
         s|sync)
             _arguments : '3:' \
                 '-q[do not print anything]' \
-                '-v[be verbose]'
+                '-v[be verbose]' \
+                '-c[clear cache before syncing]'
             ;;
         l|list)
             _arguments -s : '3:' \

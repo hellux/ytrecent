@@ -77,11 +77,11 @@ COL_DATE_FMT=$RNT_DIR/col_date_fmt
 USAGE="usage: ytr <command> [<args>]
 
 commands:
-    channel ch  -- handle channels to follow
-    cache   c   -- modify cache of videos; synchronize or clear it
-    list    ls  -- display cached list of videos
-    play    p   -- play videos via external player
-    help    h   -- show information about ytr and its commands"
+    channel ch c  -- handle channels to follow
+    sync       s  -- fetch list of recent videos from channels
+    list    ls l  -- display cached list of videos
+    play       p  -- play videos via external player
+    help       h  -- show information about ytr and its commands"
 
 DESC="description:
     ytr is a utility for keeping up with YouTube channels from the command
@@ -106,18 +106,16 @@ DESC_ENV="environment variables:
     YTR_DATE_FMT [$YTR_DATE_FMT]
         format passed to 'date' for D column for the list command"
 
-USAGE_CACHE_SYNC="usage: ytr cache sync
+USAGE_SYNC="usage: ytr sync [-qvc]
 
 Fetch RSS feeds containing recent videos from each channel specified in the
 local channel list -- $CHID_FILE.
-Add these videos to the local cache."
-USAGE_CACHE_CLEAR="usage: ytr cache clear"
-USAGE_CACHE="usage: ytr cache <command>
+Parse and add these videos to the local cache.
 
-commands:
-    sync   s -- fetch list of recent videos from channels and add to cache
-    clear  c -- clear local cache"
-
+options:
+    -q  --  quiet, do not print anything
+    -v  --  verbose, print status
+    -c  --  clear cache before syncing"
 
 USAGE_CHANNEL_ADD="usage: ytr channel add <url|username|id> [<name>]
 
@@ -182,14 +180,15 @@ examples:
 
 USAGE_HELP="usage: ytr help [<command>]"
 
-cache_sync_cmd() {
+sync_cmd() {
     quiet=false
     verbose=false
     OPTIND=1
-    while getopts :qv flag; do
+    while getopts :qvc flag; do
         case "$flag" in
             q) quiet=true;;
             v) verbose=true;;
+            c) rm -rf $CCH_DIR; cache_available=false;;
             [?]) die "invalid flag -- $OPTARG"
         esac
     done
@@ -268,23 +267,6 @@ cache_sync_cmd() {
         diff_count=$(expr $curr_count - $prev_count)
         echo "$diff_count new video(s) found."
     fi
-}
-
-cache_clear_cmd() {
-    [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_CHANNEL_CLEAR"
-    rm -rf $CCH_DIR
-}
-
-cache_cmd() {
-    command=$1
-    shift
-    [ -z "$command" ] && die "no action specified" "\n\n$USAGE_CACHE"
-
-    case $command in
-        s|sync) cache_sync_cmd "$@";;
-        c|clear) cache_clear_cmd "$@";;
-        *) die "invalid command -- $command";;
-    esac
 }
 
 channel_add_cmd() {
@@ -501,9 +483,9 @@ else
 fi
  
 case $command in
-    c|cache) cache_cmd "$@";;
-    ch|channel) channel_cmd "$@";;
-    ls|list) list_cmd "$@";;
+    s|sync) sync_cmd "$@";;
+    c|ch|channel) channel_cmd "$@";;
+    l|ls|list) list_cmd "$@";;
     p|play) play_cmd "$@";;
     h|help) help_cmd "$@";;
     *) die "invalid command -- $command" "\n\n$USAGE";;
