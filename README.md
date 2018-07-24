@@ -3,7 +3,7 @@ Command line utility for keeping up with YouTube channels.
 
 ## Purpose
 ytrecent is meant to keep track of channels, like YouTube subscriptions, but
-without the need of a YouTube channel or navigating the website with a web
+without the need of a Google account or navigating the website with a web
 browser.
 
 ## Requirements
