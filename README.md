@@ -8,7 +8,6 @@ browser.
 
 ## Requirements
 * POSIX shell and utilities
-* bash read (parsing uses -d flag for read)
 * GNU or BSD date
 * external player, for playing videos (web browser or player such as mpv)
 
