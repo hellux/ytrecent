@@ -1,8 +1,3 @@
-#!/usr/bin/env bash
-
-# TODO POSIX compliance
-#   -replace 'read -d' for parsing
-
 warn() {
     echo -e "warning: $@" 1>&2
 }
@@ -233,15 +228,12 @@ sync_cmd() {
         # remove header
         sed '1,/entry/d' $feed_file > ${feed_file}_entr
 
-        while IFS=\> read -d \< tag content; do
-            if [ "$tag" = "yt:videoId" ]; then
-                printf "%s\t" "$content"
-            elif [ "$tag" = "title" ]; then
-                printf "%s\t%s\t" "$author" "$content"
-            elif [ "$tag" = "published" ]; then
-                printf "%s\n" "$content"
-            fi
-        done < ${feed_file}_entr >> $ENTRIES
+        # parse video entries
+        awk_parse='BEGIN { RS="<"; FS=">" }
+        $1 == "yt:videoId" { printf "%s\t", $2 }
+        $1 == "title" { printf "%s\t%s\t", "'$author'", $2 }
+        $1 == "published" { printf "%s\n", $2 }'
+        awk "$awk_parse" ${feed_file}_entr >> $ENTRIES
     done < $RNT_DIR/chids
 
     # rm duplicates, sort, place columns in separate files, postprocess
