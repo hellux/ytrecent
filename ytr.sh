@@ -456,10 +456,9 @@ help_cmd() {
     [ -n "$1" ] && warn "excess arguments -- $@" "\n\n$USAGE_HELP"
     if [ -n "$topic" ]; then
         case $topic in
-            cache) echo -e "$USAGE_CACHE\n\n$USAGE_CACHE_SYNC\
-                           \n\n$USAGE_CACHE_CLEAR";;
             channel) echo -e "$USAGE_CHANNEL\n\n$USAGE_CHANNEL_ADD\
                               \n\n$USAGE_CHANNEL_REMOVE";;
+            sync) echo "$USAGE_SYNC";;
             list) echo "$USAGE_LIST";;
             play) echo "$USAGE_PLAY";;
             help) echo "$USAGE_HELP";;
