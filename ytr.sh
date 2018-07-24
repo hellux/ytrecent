@@ -13,6 +13,9 @@ die() {
 contains() {
     test "${2#*$1}" != "$2"
 }
+rm_comments() {
+    sed 's:#.*$::g;/^\-*$/d;s/ *$//' $1
+}
 
 if date -v 1d > /dev/null 2>&1;
 then BSD_DATE=true
@@ -50,6 +53,10 @@ fi
 # URL prefixes
 VIDEO_URL="https://www.youtube.com/watch?v="
 FEED_URL="https://www.youtube.com/feeds/videos.xml?channel_id="
+CHNL_URL="https://www.youtube.com/channel/"
+USER_URL="https://www.youtube.com/user/"
+# channel id regex
+CHID_REGEX="[a-zA-Z0-9\_-]{24}"
 # user channels
 CHID_FILE=$CFG_DIR/channel_ids
 # cached videos
@@ -70,25 +77,21 @@ COL_DATE_FMT=$RNT_DIR/col_date_fmt
 USAGE="usage: ytr <command> [<args>]
 
 commands:
-    s sync    -- fetch list of recent videos from channels and update cache
-    l list    -- display cached list of videos
-    p play    -- play videos via external player
-    c clean   -- clear cached list of videos
-    h help    -- show help message"
+    channel ch  -- handle channels to follow
+    cache   c   -- modify cache of videos; synchronize or clear it
+    list    ls  -- display cached list of videos
+    play    p   -- play videos via external player
+    help    h   -- show information about ytr and its commands"
 
 DESC="description:
     ytr is a utility for keeping up with YouTube channels from the command
     line. It serves a similar purpose to YouTube subscriptions, but no YouTube
-    account is required. Channels are specified in $CHID_FILE
-    with the following format:
-        <channel1 id> <name1>
-        <channel2 id> <name2>
-             :           :
-    'ytr sync' then parses these IDs and fetches RSS feeds from youtube.com
-    which contain links to the 15 most recent videos from each channel. Videos
-    are then sorted by date of publish and displayed with 'ytr list'. 'ytr
-    play' can be used to play these videos immediately through an external
-    video player or web browser."
+    account is required. A channel can be followed with 'ytr channel add
+    <channel>'. 'ytr cache sync' then fetches RSS feeds from youtube.com which
+    contain links to recent videos from each channel. Videos are then sorted by
+    date of publish and displayed with 'ytr list'. 'ytr play' can be used to
+    play these videos immediately through an external video player or web
+    browser."
 
 DESC_ENV="environment variables:
     YTR_PLAYER [$YTR_PLAYER]
@@ -103,15 +106,50 @@ DESC_ENV="environment variables:
     YTR_DATE_FMT [$YTR_DATE_FMT]
         format passed to 'date' for D column for the list command"
 
-USAGE_SYNC="usage: ytr sync"
+USAGE_CACHE_SYNC="usage: ytr cache sync
+
+Fetch RSS feeds containing recent videos from each channel specified in the
+local channel list -- $CHID_FILE.
+Add these videos to the local cache."
+USAGE_CACHE_CLEAR="usage: ytr cache clear"
+USAGE_CACHE="usage: ytr cache <command>
+
+commands:
+    sync   s -- fetch list of recent videos from channels and add to cache
+    clear  c -- clear local cache"
+
+
+USAGE_CHANNEL_ADD="usage: ytr channel add <url|username|id> [<name>]
+
+Add channel to channel list at $CHID_FILE.
+Channel ID and name of channel will be parsed if not provided.
+
+examples:
+    add channel by URL:
+        ytr add https://www.youtube.com/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ
+    add channel by username:
+        ytr add YouTuber123
+    add channel by id and choose name:
+        ytr add UClgRkhTL3_hImCAmdLfDE4g movies"
+USAGE_CHANNEL_REMOVE="usage: ytr channel remove <name>
+
+Remove channel from channel list at $CHID_FILE."
+USAGE_CHANNEL="usage: ytr channel <command>
+
+commands:
+    add     a   -- add channel to follow
+    remove  rm  -- remove channel
+    list    ls  -- show followed channels"
 
 USAGE_LIST="usage: ytr list [-sat] [-d <days>] [<columns>]
 
+List videos from local cache.
+
 options:
-    -s       --  sync cache before listing
-    -d<days> --  show videos newer than <days> days old
-    -a       --  show all videos, overrides -d
-    -t       --  print entries with tabs as separators instead of a table
+    -s          --  sync cache before listing
+    -d<days>    --  show only videos newer than <days> days old
+    -a          --  show all videos, overrides -d
+    -t          --  print entries with tabs as separators instead of a table
 
 columns:
     n -- video number, zero padded
@@ -125,12 +163,15 @@ columns:
     U -- youtube video URL
 
 examples:
-    default listing: ytr list or ytr list -$YTR_COLS
-    list only full titles: ytr list -t
+    default listing: ytr list or ytr list -c $YTR_COLS
+    list only full titles: ytr list -c t
     list videos published the last week in cache: ytr list -d7
     sync cache and list videos from this week: ytr list -sd7"
 
 USAGE_PLAY="usage: ytr play [-p] <video_numbers>
+
+Launch a sequence of videos with given command. Each video will be run with
+<command> <url>.
 
 options:
     -p -- print video URLs instead of playing
@@ -139,11 +180,9 @@ examples:
     play most recent video: ytr play 1
     play three videos in specific order: ytr play 12 7 8"
 
-USAGE_CLEAN="usage: ytr clean"
-
 USAGE_HELP="usage: ytr help [<command>]"
 
-sync_cmd() {
+cache_sync_cmd() {
     quiet=false
     verbose=false
     OPTIND=1
@@ -156,19 +195,17 @@ sync_cmd() {
     done
     shift $((OPTIND-1))
 
-    [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_SYNC"
+    [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_CACHE_SYNC"
     [ ! -r $CHID_FILE ] && die "no file with channel IDs found at $CHID_FILE"
     [ "$quiet" = "true" ] && verbose=false
 
     mkdir -p $CCH_DIR || exit 1
     mkdir -p $RNT_DIR || exit 1
 
-    # rm comments from CHID_FILE
-    sed 's:#.*$::g;/^\-*$/d' $CHID_FILE > $RNT_DIR/chids_stripped
+    rm_comments $CHID_FILE > $RNT_DIR/chids_stripped
     # rm invalid chids
-    CHID_REGEX="^[a-zA-Z0-9\_-]{24}$"
     while read chid author; do
-        if echo $chid | grep -q -E $CHID_REGEX;
+        if echo $chid | grep -q -E "^$CHID_REGEX$";
         then echo "$chid $author"
         else warn "invalid channel id -- $chid"
         fi
@@ -183,7 +220,10 @@ sync_cmd() {
     ec=$?
     [ $ec -ne 0 ] && die "fetch failed -- curl exit code $ec"
 
-    [ "$quiet" = "false" ] && prev_count=$(wc -l < $ENTRIES)
+    if [ "$cache_available" = "true" ]
+    then prev_count=$(wc -l < $ENTRIES)
+    else prev_count=0
+    fi
     # parse videos from channel feeds
     while read chid author; do
         [ "$verbose" = "true" ] && echo "Parsing videos from $author..."
@@ -230,6 +270,87 @@ sync_cmd() {
     fi
 }
 
+cache_clear_cmd() {
+    [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_CHANNEL_CLEAR"
+    rm -rf $CCH_DIR
+}
+
+cache_cmd() {
+    command=$1
+    shift
+    [ -z "$command" ] && die "no action specified" "\n\n$USAGE_CACHE"
+
+    case $command in
+        s|sync) cache_sync_cmd "$@";;
+        c|clear) cache_clear_cmd "$@";;
+        *) die "invalid command -- $command";;
+    esac
+}
+
+channel_add_cmd() {
+    channel=$1
+    shift
+    name=$@
+    if echo $channel | grep -q -E "^$CHID_REGEX$"; then
+        url=$CHNL_URL$channel
+        chid=$channel
+    elif echo $channel | grep -q "$CHNL_URL"; then
+        url=$channel
+        chid=$(echo $channel | cut -d/ -f5)
+    elif echo $channel | grep -q "$USER_URL"; then
+        url=$channel
+    else
+        url=$USER_URL$channel
+    fi
+
+    if [ -z "$chid" -o -z "$name" ]; then
+        mkdir -p $RNT_DIR
+        curl -s $url > $RNT_DIR/channel 
+        ec=$?
+        [ $ec -ne 0 ] && die "channel fetch failed -- curl exit code $ec"
+        if [ -z $chid ]; then
+            chid=$(awk 'BEGIN { FS="channel_id="; RS="\"" } { print $2 }' \
+                   $RNT_DIR/channel | tr -d '\n')
+        fi 
+    fi;
+
+    echo $chid | grep -q -E "^$CHID_REGEX$" || die "channel id parse failed"
+    grep -q "^$chid" $CHID_FILE && die "channel already in list -- $chid"
+
+    [ -z "$name" ] && name=$(sed -n 's/<title>//p' $RNT_DIR/channel | xargs)
+
+    echo $chid $name >> $CHID_FILE
+    echo "Added \"$name\", id: \"$chid\""
+
+
+    rm -rf $RNT_DIR
+}
+
+channel_remove_cmd() {
+    name=$@
+    mkdir -p $RNT_DIR
+    rm_comments $CHID_FILE | grep -v -E "^$CHID_REGEX $name$" > $RNT_DIR/new
+    mv $RNT_DIR/new $CHID_FILE
+    rm -rf $RNT_DIR
+}
+
+channel_list_cmd() {
+    rm_comments $CHID_FILE | cut -f2- -d' '
+}
+
+channel_cmd() {
+    command=$1
+    shift
+    [ -z "$command" ] && channel_list_cmd "$@" && exit 0
+
+    case $command in
+        a|add) channel_add_cmd "$@";;
+        rm|remove) channel_remove_cmd "$@";;
+        ls|list) channel_list_cmd "$@";;
+        *) die "invalid command -- $command" "\n\n$USAGE_CACHE";;
+    esac
+}
+
 list_cmd() {
     sync=false
     days=$YTR_SINCE_DAYS
@@ -252,7 +373,7 @@ list_cmd() {
     [ -z "$colstr" ] && colstr=$YTR_COLS
     [ "$days" -gt 0 ] 2>/dev/null || die "invalid day count -- $days"
     [ "$sync" = "true" ] && sync_cmd -q
-    [ "$cache_available" = "false" ] && die "no video list found in $CCH_DIR"
+    [ "$cache_available" = "false" ] && die "no cache found in $CCH_DIR"
 
     cols=""
     OPTIND=1
@@ -347,22 +468,19 @@ play_cmd() {
     done
 }
 
-clean_cmd() {
-    [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_CLEAN"
-    rm -rf $CCH_DIR
-}
-
 help_cmd() {
     topic=$1
     shift
     [ -n "$1" ] && warn "excess arguments -- $@" "\n\n$USAGE_HELP"
     if [ -n "$topic" ]; then
         case $topic in
-            s|sync) echo "$USAGE_SYNC";;
-            l|list) echo "$USAGE_LIST";;
-            p|play) echo "$USAGE_PLAY";;
-            c|clean) echo "$USAGE_CLEAN";;
-            h|help) echo "$USAGE_HELP";;
+            cache) echo -e "$USAGE_CACHE\n\n$USAGE_CACHE_SYNC\
+                           \n\n$USAGE_CACHE_CLEAR";;
+            channel) echo -e "$USAGE_CHANNEL\n\n$USAGE_CHANNEL_ADD\
+                              \n\n$USAGE_CHANNEL_REMOVE";;
+            list) echo "$USAGE_LIST";;
+            play) echo "$USAGE_PLAY";;
+            help) echo "$USAGE_HELP";;
             *) warn "invalid topic -- $topic"; help_cmd "help";;
         esac
     else
@@ -373,10 +491,7 @@ help_cmd() {
 
 command=$1
 shift
-
-if [ -z "$command" ]; then
-    die "no action specified" "\n\n$USAGE"
-fi
+[ -z "$command" ] && list_cmd && exit 0
 
 if [ -r $COL_ID -a -r $COL_AUTHOR -a -r $COL_TITLE -a -r $COL_DATE ]; then
     cache_available=true
@@ -386,12 +501,12 @@ else
 fi
  
 case $command in
-    s|sync) sync_cmd "$@";;
-    l|list) list_cmd "$@";;
+    c|cache) cache_cmd "$@";;
+    ch|channel) channel_cmd "$@";;
+    ls|list) list_cmd "$@";;
     p|play) play_cmd "$@";;
-    c|clean) clean_cmd "$@";;
     h|help) help_cmd "$@";;
-    *) die "invalid command -- $command";;
+    *) die "invalid command -- $command" "\n\n$USAGE";;
 esac
 
 exit 0
