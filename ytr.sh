@@ -44,7 +44,8 @@ else CFG_DIR="$XDG_CONFIG_HOME/ytrecent"
 fi
 
 # ytr config fallbacks/defaults
-[ -z "$YTR_PLAYER" ] && YTR_PLAYER=mpv
+[ -z "$YTR_PLAYER" ] && YTR_PLAYER="mpv"
+[ -z "$YTR_HTML_READER" ] && YTR_HTML_READER="links -dump"
 [ -z "$YTR_TITLE_LEN" ] && YTR_TITLE_LEN=80
 [ -z "$YTR_SINCE_DAYS" ] && YTR_SINCE_DAYS=30
 [ -z "$YTR_COLS" ] && YTR_COLS="NaTD"
@@ -166,13 +167,14 @@ examples:
     list videos published the last week in cache: ytr list -d7
     sync cache and list videos from this week: ytr list -sd7"
 
-USAGE_PLAY="usage: ytr play [-p] <video_numbers>
+USAGE_PLAY="usage: ytr play [-p|-d] <video_numbers>
 
 Launch a sequence of videos with given command. Each video will be run with
 <command> <url>.
 
 options:
     -p -- print video URLs instead of playing
+    -d -- show video description instead of playing
 
 examples:
     play most recent video: ytr play 1
@@ -297,13 +299,14 @@ channel_add_cmd() {
     fi;
 
     echo $chid | grep -q -E "^$CHID_REGEX$" || die "channel id parse failed"
-    grep -q "^$chid" $CHID_FILE && die "channel already in list -- $chid"
+    if [ -r $CHID_FILE ] && grep -q "^$chid" $CHID_FILE; then
+        die "channel already in list -- $chid"
+    fi
 
     [ -z "$name" ] && name=$(sed -n 's/<title>//p' $RNT_DIR/channel | xargs)
 
     echo $chid $name >> $CHID_FILE
-    echo "Added \"$name\", id: \"$chid\""
-
+    echo "\"$name\" added, id=$chid"
 
     rm -rf $RNT_DIR
 }
@@ -317,7 +320,7 @@ channel_remove_cmd() {
 }
 
 channel_list_cmd() {
-    rm_comments $CHID_FILE | cut -f2- -d' '
+    [ -r $CHID_FILE ] && rm_comments $CHID_FILE | cut -f2- -d' ' | sort
 }
 
 channel_cmd() {
@@ -428,15 +431,28 @@ list_cmd() {
     rm -rf $RNT_DIR
 }
 
+play_desc_cmd() {
+    url=$1
+    mkdir -p $RNT_DIR
+    curl -s $url | grep watch-description-text > $RNT_DIR/desc
+    ec=$?
+    [ $ec -ne 0 ] && die "fetching description failed -- curl exit code $ec"
+    $YTR_HTML_READER "$RNT_DIR/desc"
+    rm -rf $RNT_DIR
+}
+
 play_cmd() {
+    desc=false
     OPTIND=1
-    while getopts :p flag; do
+    while getopts :pd flag; do
         case "$flag" in
             p) YTR_PLAYER="echo";;
+            d) YTR_PLAYER="play_desc_cmd";;
             [?]) die "invalid flag -- $OPTARG"
         esac
     done
     shift $((OPTIND-1))
+
     [ -z $1 ] && die "no video specifed" "\n\n$USAGE_PLAY"
     [ "$cache_available" = "false" ] && die "no video list found in $CCH_DIR"
     

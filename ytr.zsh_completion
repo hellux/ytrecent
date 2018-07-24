@@ -21,7 +21,7 @@ elif (( CURRENT >= 3 )); then
             esac
             ;;
         s|sync)
-            _arguments : '3:' \
+            _arguments -s : '3:' \
                 '-q[do not print anything]' \
                 '-v[be verbose]' \
                 '-c[clear cache before syncing]'
@@ -44,7 +44,8 @@ elif (( CURRENT >= 3 )); then
             ;;
         p|play)
             _arguments : '3:' \
-                '-p[print video URLs instead of playing]'
+                '-p[print video URLs instead of playing]' \
+                '-d[show video description instead of playing]'
             local -a videos
             IFS=$'\t'
             while read num author title; do
