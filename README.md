@@ -44,10 +44,9 @@ Synchronize the local cache with the subscribed channels' recent videos.
 List all videos released in the last month.
 
     $ ytr list
-    [3]  3Blue1Brown  3b1b featured creators #1                             Ср 27 июн 18:29
-    [2]  Mathologer   Epicycles, complex Fourier and Homer Simpson's orbit  Пт  6 июл 23:10
-    [1]  Ben Eater    Error detection: Parity checking                      Сб 14 июл 16:37
-
+    [3]  3Blue1Brown  3b1b featured creators #1                             Wed 27 Jun 18:29
+    [2]  Mathologer   Epicycles, complex Fourier and Homer Simpson's orbit  Fri  6 Jul 23:10
+    [1]  Ben Eater    Error detection: Parity checking                      Sat 14 Jul 16:37
 
 Play videos in order of release.
 
