@@ -53,6 +53,7 @@ CHNL_URL="https://www.youtube.com/channel/"
 USER_URL="https://www.youtube.com/user/"
 # channel id regex
 CHID_REGEX="[a-zA-Z0-9\_-]{24}"
+VIDID_REGEX="[a-zA-Z0-9\_-]{11}"
 # user channels
 CHID_FILE=$CFG_DIR/channel_ids
 # cached videos
@@ -162,7 +163,7 @@ examples:
     list videos published the last week in cache: ytr list -d7
     sync cache and list videos from this week: ytr list -sd7"
 
-USAGE_PLAY="usage: ytr play [-p|-d] <video_numbers>
+USAGE_PLAY="usage: ytr play [-p|-d] <video_number|url|id...>
 
 Launch a sequence of videos with given command. Each video will be run with
 <command> <url>.
@@ -426,9 +427,11 @@ list_cmd() {
 play_desc_cmd() {
     url=$1
     mkdir -p $RNT_DIR
-    curl -s $url | grep watch-description-text > $RNT_DIR/desc
+    curl -s $url > $RNT_DIR/vid
     ec=$?
     [ $ec -ne 0 ] && die "fetching description failed -- curl exit code $ec"
+    grep watch-description-text $RNT_DIR/vid > $RNT_DIR/desc
+    [ $? -ne 0 ] && die "no description found at $url"
     $YTR_HTML_READER "$RNT_DIR/desc"
     rm -rf $RNT_DIR
 }
@@ -448,13 +451,16 @@ play_cmd() {
     [ -z $1 ] && die "no video specifed" "\n\n$USAGE_PLAY"
     [ "$cache_available" = "false" ] && die "no video list found in $CCH_DIR"
     
-    for num in $@; do
-        if [ "1" -le "$num" -a "$num" -le "$cache_count" ] 2>/dev/null; then
-            video_id=$(sed "${num}q;d" $COL_ID) # pick out line $num
-            $YTR_PLAYER $VIDEO_URL$video_id
+    for vid in $@; do
+        if [ "1" -le "$vid" -a "$vid" -le "$cache_count" ] 2>/dev/null; then
+            video_id=$(sed "${vid}q;d" $COL_ID) # pick out line $vid
+            url=$VIDEO_URL$video_id
+        elif echo $vid | grep -q -E "^$VIDID_REGEX$"; then
+            url=$VIDEO_URL$vid
         else
-            die "invalid video number -- $num" "\n\n$USAGE_PLAY"
+            url=$vid
         fi
+        $YTR_PLAYER "$url"
     done
 }
 
