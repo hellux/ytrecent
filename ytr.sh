@@ -84,11 +84,11 @@ DESC="description:
     ytr is a utility for keeping up with YouTube channels from the command
     line. It serves a similar purpose to YouTube subscriptions, but no YouTube
     account is required. A channel can be followed with 'ytr channel add
-    <channel>'. 'ytr cache sync' then fetches RSS feeds from youtube.com which
-    contain links to recent videos from each channel. Videos are then sorted by
-    date of publish and displayed with 'ytr list'. 'ytr play' can be used to
-    play these videos immediately through an external video player or web
-    browser."
+    <channel>'. This adds an entry to the file $CHID_FILE.
+    'ytr sync' then fetches RSS feeds from youtube.com which contain
+    links to recent videos from each channel. Videos are then sorted by date of
+    publish and displayed with 'ytr list'. 'ytr play' can be used to watch
+    these videos immediately through an external video player or web browser."
 
 DESC_ENV="environment variables:
     YTR_PLAYER [$YTR_PLAYER]
@@ -129,7 +129,7 @@ examples:
 USAGE_CHANNEL_REMOVE="usage: ytr channel remove <name>
 
 Remove channel from channel list at $CHID_FILE."
-USAGE_CHANNEL="usage: ytr channel <command>
+USAGE_CHANNEL="usage: ytr channel <command> [<args>]
 
 commands:
     add     a   -- add channel to follow
@@ -351,7 +351,7 @@ list_cmd() {
     [ -z "$colstr" ] && colstr=$YTR_COLS
     [ "$days" -gt 0 ] 2>/dev/null || die "invalid day count -- $days"
     [ "$sync" = "true" ] && sync_cmd -q
-    [ "$cache_available" = "false" ] && die "no cache found in $CCH_DIR"
+    [ "$cache_available" = "false" ] && die "no cache, use sync command"
 
     cols=""
     OPTIND=1
