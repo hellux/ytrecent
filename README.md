@@ -2,15 +2,22 @@
 Command line utility for keeping up with YouTube channels.
 
 ## Purpose
-ytrecent is meant to keep track of channels, like YouTube subscriptions, but
+`ytrecent` is meant to keep track of channels, like YouTube subscriptions, but
 without the need of a Google account or navigating the website with a web
 browser.
+
+## Function
+Subscriptions are kept track of by keeping a list of channels in a local file.
+The script checks each listed channel for recent videos and stores their
+metadata to a local cache. These videos can then be listed in order of release
+date - similar to YouTube's subscription page. The script can also invoke an
+external player in order to watch the videos.
 
 ## Requirements
 * POSIX shell and utilities
 * GNU or BSD date
-* external player, for playing videos (web browser or player such as mpv)
-* external html reader, for viewing descriptions (web browser such as links)
+* external player, for playing videos (web browser or player such as `mpv`)
+* external html reader, for viewing descriptions (web browser such as `links`)
 
 ## Usage
     usage: ytr <command> [<args>]
@@ -43,11 +50,11 @@ Synchronize the local cache with the subscribed channels' recent videos.
 
 List all videos released in the last month.
 
-    $ ytr list
+    $ ytr list -d 30
     [3]  3Blue1Brown  3b1b featured creators #1                             Wed 27 Jun 18:29
     [2]  Mathologer   Epicycles, complex Fourier and Homer Simpson's orbit  Fri  6 Jul 23:10
     [1]  Ben Eater    Error detection: Parity checking                      Sat 14 Jul 16:37
 
-Play videos in order of release.
+Play these three videos in order of release.
 
     ytr play 3 2 1
