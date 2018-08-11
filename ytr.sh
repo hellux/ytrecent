@@ -299,6 +299,10 @@ channel_add_cmd() {
 
     [ -z "$name" ] && name=$(sed -n 's/<title>//p' $RNT_DIR/channel | xargs)
 
+    if [ ! -r $CHID_FILE ]; then
+        mkdir -p $CFG_DIR || die "unable to create config dir at $CFG_DIR"
+        touch $CHID_FILE || die "unable to create CHID_FILE at $CHID_FILE"
+    fi
     echo $chid $name >> $CHID_FILE
     echo "\"$name\" added, id=$chid"
 
@@ -307,10 +311,13 @@ channel_add_cmd() {
 
 channel_remove_cmd() {
     name=$@
+    [ -r $CHID_FILE ] || die "no CHID_FILE to modify exists"
     mkdir -p $RNT_DIR || die "unable to create runtime dir at $RNT_DIR"
-    # TODO don't remove comments
+
+    # inverse grep to keep all channels but the one removed
     rm_comments $CHID_FILE | grep -v -E "^$CHID_REGEX $name$" > $RNT_DIR/new
     mv $RNT_DIR/new $CHID_FILE
+
     rm -rf $RNT_DIR
 }
 
