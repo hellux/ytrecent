@@ -132,19 +132,19 @@ options:
 
 USAGE_CHANNEL_ADD="usage: ytr channel add <url|username|id> [<name>]
 
-Add channel to channel list at $CHID_FILE.
-Channel ID and name of channel will be parsed if not provided.
+Add channel to CHID_FILE. Channel ID and name of channel will be parsed if not
+provided.
 
 examples:
     add channel by URL:
         ytr add https://www.youtube.com/channel/UC-9-kyTW8ZkZNDHQJ6FgpwQ
     add channel by username:
-        ytr add YouTuber123
+        ytr add youTuber123
     add channel by id and choose name:
         ytr add UClgRkhTL3_hImCAmdLfDE4g movies"
 USAGE_CHANNEL_REMOVE="usage: ytr channel remove <name>
 
-Remove channel from channel list at $CHID_FILE."
+Remove channel from CHID_FILE."
 USAGE_CHANNEL="usage: ytr channel <command> [<args>]
 
 commands:
@@ -174,9 +174,9 @@ columns:
     U -- youtube video URL
 
 examples:
-    default listing: ytr list or ytr list -c $YTR_COLS
-    list only full titles: ytr list -c t
-    list videos published the last week in cache: ytr list -d7
+    default listing: ytr list or ytr list $YTR_COLS
+    list only full titles: ytr list t
+    list videos published the last week in cache: ytr list -d 7
     sync cache and list videos from this week: ytr list -sd7"
 
 USAGE_PLAY="usage: ytr play [-p|-d] <video_number|url|id...>
@@ -314,9 +314,16 @@ channel_remove_cmd() {
     [ -r $CHID_FILE ] || die "no CHID_FILE to modify exists"
     mkdir -p $RNT_DIR || die "unable to create runtime dir at $RNT_DIR"
 
+    count_pre=$(wc -l < $CHID_FILE)
     # inverse grep to keep all channels but the one removed
     rm_comments $CHID_FILE | grep -v -E "^$CHID_REGEX $name$" > $RNT_DIR/new
     mv $RNT_DIR/new $CHID_FILE
+    count_post=$(wc -l < $CHID_FILE)
+
+    if [ $count_post -lt $count_pre ];
+    then echo \"$name\" removed
+    else echo \"$name\" not found
+    fi
 
     rm -rf $RNT_DIR
 }
