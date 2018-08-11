@@ -30,7 +30,7 @@ then CCH_DIR="$HOME/.cache/ytrecent"
 else CCH_DIR="$XDG_CACHE_HOME/ytrecent"
 fi
 if [ -z "$XDG_RUNTIME_DIR" ];
-then RNT_DIR="$CCH_DIR/runtime"
+then RNT_DIR="/tmp/ytrecent"
 else RNT_DIR="$XDG_RUNTIME_DIR/ytrecent"
 fi
 if [ -z "$XDG_CONFIG_HOME" ];
@@ -51,19 +51,18 @@ VIDEO_URL="https://www.youtube.com/watch?v="
 FEED_URL="https://www.youtube.com/feeds/videos.xml?channel_id="
 CHNL_URL="https://www.youtube.com/channel/"
 USER_URL="https://www.youtube.com/user/"
-# channel id regex
+# id regex
 CHID_REGEX="[a-zA-Z0-9\_-]{24}"
 VIDID_REGEX="[a-zA-Z0-9\_-]{11}"
 # user channels
 CHID_FILE=$CFG_DIR/channel_ids
 # cached videos
 ENTRIES=$CCH_DIR/entries
-# cached columns
-COL_ID=$CCH_DIR/col_id
-COL_AUTHOR=$CCH_DIR/col_author
-COL_TITLE=$CCH_DIR/col_title_full
-COL_DATE=$CCH_DIR/col_date_utc
 # tmp postprocess columns
+COL_ID=$RNT_DIR/col_id
+COL_AUTHOR=$RNT_DIR/col_author
+COL_TITLE=$RNT_DIR/col_title_full
+COL_DATE=$RNT_DIR/col_date_utc
 COL_URL=$RNT_DIR/col_url
 COL_NUM=$RNT_DIR/col_num
 COL_NUM_ZERO=$RNT_DIR/col_num_zero
@@ -84,24 +83,41 @@ DESC="description:
     ytr is a utility for keeping up with YouTube channels from the command
     line. It serves a similar purpose to YouTube subscriptions, but no YouTube
     account is required. A channel can be followed with 'ytr channel add
-    <channel>'. This adds an entry to the file $CHID_FILE.
-    'ytr sync' then fetches RSS feeds from youtube.com which contain
-    links to recent videos from each channel. Videos are then sorted by date of
-    publish and displayed with 'ytr list'. 'ytr play' can be used to watch
-    these videos immediately through an external video player or web browser."
+    <channel>'. This adds an entry to the CHID_FILE. 'ytr sync' then fetches
+    RSS feeds from youtube.com which contain links to recent videos from each
+    channel. Videos are then sorted by date of publish and displayed with 'ytr
+    list'. 'ytr play' can be used to watch these videos immediately through an
+    external video player or web browser."
 
 DESC_ENV="environment variables:
     YTR_PLAYER [$YTR_PLAYER]
-        command used to play videos $YTR_PLAYER, ytr will call the player
-        with the video url as argument
+        command used to play videos, the play command will invoke the player
+        with the video URL as the only argument
     YTR_TITLE_LEN [$YTR_TITLE_LEN]
-        length titles will be truncated in T column for the list command
+        length titles will be truncated to this length in the T column for the
+        list command
     YTR_SINCE_DAYS [$YTR_SINCE_DAYS]
-        fallback value for list -d option
+        the list command will filter out videos older than this, unless
+        overridden by the -d or -a flag
     YTR_COLS [$YTR_COLS]
-        fallback column string for the command
+        default column string for the list command, determining which columns
+        are displayed
     YTR_DATE_FMT [$YTR_DATE_FMT]
-        format passed to 'date' for D column for the list command"
+        format passed to 'date' for the D column for the list command"
+
+DESC_FILES="files:
+    CHID_FILE [$CHID_FILE]
+        Channel IDs for followed channels are stored in this file with the
+        following format:
+            <channel1 id> <channel1 name>
+            <channel2 id> <channel2 name> # comment
+                 :               :
+
+    ENTRIES [$ENTRIES]
+        ENTRIES stores the cache of video metadata obtained by the sync
+        command. Each line lists the video ID, author, title and date of a
+        single video in that order. The fields are separated by a tab
+        character."
 
 USAGE_SYNC="usage: ytr sync [-qvc]
 
@@ -186,7 +202,7 @@ sync_cmd() {
         case "$flag" in
             q) quiet=true;;
             v) verbose=true;;
-            c) rm -rf $CCH_DIR; cache_available=false;;
+            c) rm -rf $CCH_DIR;;
             [?]) die "invalid flag -- $OPTARG"
         esac
     done
@@ -196,8 +212,8 @@ sync_cmd() {
     [ ! -r $CHID_FILE ] && die "no file with channel IDs found at $CHID_FILE"
     [ "$quiet" = "true" ] && verbose=false
 
-    mkdir -p $CCH_DIR || exit 1
-    mkdir -p $RNT_DIR || exit 1
+    mkdir -p $CCH_DIR || die "unable to create cache directory at $CCH_DIR"
+    mkdir -p $RNT_DIR || die "unable to create runtime directory at $RNT_DIR"
 
     rm_comments $CHID_FILE > $RNT_DIR/chids_stripped
     # rm invalid chids
@@ -217,7 +233,7 @@ sync_cmd() {
     ec=$?
     [ $ec -ne 0 ] && die "fetch failed -- curl exit code $ec"
 
-    if [ "$cache_available" = "true" ]
+    if [ -r $ENTRIES ]
     then prev_count=$(wc -l < $ENTRIES)
     else prev_count=0
     fi
@@ -240,21 +256,6 @@ sync_cmd() {
     # rm duplicates, sort, place columns in separate files, postprocess
     sort -t $'\t' -r -k 4 $ENTRIES | uniq > ${ENTRIES}_sorted
     mv ${ENTRIES}_sorted $ENTRIES
-    cut -f 1 $ENTRIES > $COL_ID
-    cut -f 2 $ENTRIES > $COL_AUTHOR
-    cut -f 3 $ENTRIES > $COL_TITLE
-    cut -f 4 $ENTRIES > $COL_DATE
-    cache_available=true
-    cache_count=$(wc -l < $COL_ID)
-    # replace html entities
-    sed "s/&nbsp;/ /g;
-        s/&amp;/\&/g;
-        s/&lt;/\</g;
-        s/&gt;/\>/g;
-        s/&quot;/\"/g;
-        s/&ldquo;/\"/g;
-        s/&rdquo;/\"/g;" $COL_TITLE > ${COL_TITLE}_rc
-    mv ${COL_TITLE}_rc $COL_TITLE
     rm -rf $RNT_DIR
 
     if [ "$quiet" = "false" ]; then
@@ -281,7 +282,7 @@ channel_add_cmd() {
     fi
 
     if [ -z "$chid" -o -z "$name" ]; then
-        mkdir -p $RNT_DIR
+        mkdir -p $RNT_DIR || die "unable to create runtime dir at $RNT_DIR"
         curl -s $url > $RNT_DIR/channel 
         ec=$?
         [ $ec -ne 0 ] && die "channel fetch failed -- curl exit code $ec"
@@ -306,7 +307,8 @@ channel_add_cmd() {
 
 channel_remove_cmd() {
     name=$@
-    mkdir -p $RNT_DIR
+    mkdir -p $RNT_DIR || die "unable to create runtime dir at $RNT_DIR"
+    # TODO don't remove comments
     rm_comments $CHID_FILE | grep -v -E "^$CHID_REGEX $name$" > $RNT_DIR/new
     mv $RNT_DIR/new $CHID_FILE
     rm -rf $RNT_DIR
@@ -351,7 +353,7 @@ list_cmd() {
     [ -z "$colstr" ] && colstr=$YTR_COLS
     [ "$days" -gt 0 ] 2>/dev/null || die "invalid day count -- $days"
     [ "$sync" = "true" ] && sync_cmd -q
-    [ "$cache_available" = "false" ] && die "no cache, use sync command"
+    [ ! -r $ENTRIES ] && die "no cache found, use sync command"
 
     cols=""
     OPTIND=1
@@ -370,6 +372,15 @@ list_cmd() {
         esac
     done
 
+    mkdir -p $RNT_DIR || die "unable to create runtime dir at $RNT_DIR"
+
+    # split cache into separate files
+    cut -f 1 $ENTRIES > $COL_ID
+    cut -f 3 $ENTRIES > $COL_TITLE
+    cut -f 2 $ENTRIES > $COL_AUTHOR
+    cut -f 4 $ENTRIES > $COL_DATE
+
+    # filter old entries, determine video count
     if [ ! "$all" = "true" ]; then
         since=$(expr "$(date +%s)" - \( 86400 \* $days \))
         video_count="0"
@@ -384,7 +395,17 @@ list_cmd() {
         video_count=$cache_count
     fi
 
-    mkdir -p $RNT_DIR
+    if contains $COL_TITLE_TR "$cols" -o contains $COL_TITLE "$cols"; then
+        # replace html entities
+        sed "s/&nbsp;/ /g;
+            s/&amp;/\&/g;
+            s/&lt;/\</g;
+            s/&gt;/\>/g;
+            s/&quot;/\"/g;
+            s/&ldquo;/\"/g;
+            s/&rdquo;/\"/g;" $COL_TITLE > ${COL_TITLE}_rc
+        mv ${COL_TITLE}_rc $COL_TITLE
+    fi
     if contains $COL_URL "$cols"; then
         while read id; do
             echo $VIDEO_URL$id
@@ -449,7 +470,7 @@ play_cmd() {
     shift $((OPTIND-1))
 
     [ -z $1 ] && die "no video specifed" "\n\n$USAGE_PLAY"
-    [ "$cache_available" = "false" ] && die "no video list found in $CCH_DIR"
+    [ ! -r $ENTRIES ] && die "no cache found, use sync command"
     
     for vid in $@; do
         if [ "1" -le "$vid" -a "$vid" -le "$cache_count" ] 2>/dev/null; then
@@ -480,7 +501,7 @@ help_cmd() {
         esac
     else
         echo "ytrecent -- YouTube channel tracker"
-        echo -e "\n$USAGE\n\n$DESC\n\n$DESC_ENV"
+        echo -e "\n$USAGE\n\n$DESC\n\n$DESC_FILES\n\n$DESC_ENV"
     fi
 }
 
@@ -488,13 +509,6 @@ command=$1
 shift
 [ -z "$command" ] && list_cmd && exit 0
 
-if [ -r $COL_ID -a -r $COL_AUTHOR -a -r $COL_TITLE -a -r $COL_DATE ]; then
-    cache_available=true
-    cache_count=$(wc -l < $COL_ID)
-else
-    cache_available=false
-fi
- 
 case $command in
     s|sync) sync_cmd "$@";;
     c|ch|channel) channel_cmd "$@";;
