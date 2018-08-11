@@ -3,6 +3,7 @@ warn() {
 }
 die() {
     echo -e "error: $@" 1>&2
+    rm -rf $RNT_DIR
     exit 1
 }
 contains() {
@@ -220,9 +221,11 @@ sync_cmd() {
     while read chid author; do
         if echo $chid | grep -q -E "^$CHID_REGEX$";
         then echo "$chid $author"
-        else warn "invalid channel id -- $chid"
+        else warn "invalid channel entry -- $chid $author"
         fi
     done < $RNT_DIR/chids_stripped > $RNT_DIR/chids
+
+    [ ! -s $RNT_DIR/chids ] && die "no channels in CHID file"
 
     # fetch rss feeds
     curl_args="-m1"
@@ -408,7 +411,7 @@ list_cmd() {
     else
         video_count=$(wc -l < $ENTRIES)
     fi
-    if [ $video_count = 0 ]; then
+    if [ $video_count -eq 0 ]; then
         rm -rf $RNT_DIR
         exit 0
     fi;
