@@ -401,6 +401,10 @@ list_cmd() {
     else
         video_count=$cache_count
     fi
+    if [ $video_count = 0 ]; then
+        rm -rf $RNT_DIR
+        exit 0
+    fi;
 
     if contains $COL_TITLE_TR "$cols" -o contains $COL_TITLE "$cols"; then
         # replace html entities
