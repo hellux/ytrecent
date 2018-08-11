@@ -399,7 +399,7 @@ list_cmd() {
             fi
         done < $COL_DATE
     else
-        video_count=$cache_count
+        video_count=$(wc -l < $ENTRIES)
     fi
 
     if contains $COL_TITLE_TR "$cols" -o contains $COL_TITLE "$cols"; then
@@ -479,8 +479,9 @@ play_cmd() {
     [ -z $1 ] && die "no video specifed" "\n\n$USAGE_PLAY"
     [ ! -r $ENTRIES ] && die "no cache found, use sync command"
     
+    vid_count=$(wc -l < $ENTRIES)
     for vid in $@; do
-        if [ "1" -le "$vid" -a "$vid" -le "$cache_count" ] 2>/dev/null; then
+        if [ "1" -le "$vid" -a "$vid" -le "$vid_count" ] 2>/dev/null; then
             video_id=$(sed "${vid}q;d" $COL_ID) # pick out line $vid
             url=$VIDEO_URL$video_id
         elif echo $vid | grep -q -E "^$VIDID_REGEX$"; then
