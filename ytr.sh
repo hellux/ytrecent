@@ -61,15 +61,15 @@ CHID_FILE=$CFG_DIR/channel_ids
 ENTRIES=$CCH_DIR/entries
 # tmp postprocess columns
 COL_ID=$RNT_DIR/col_id
-COL_AUTHOR=$RNT_DIR/col_author
-COL_TITLE=$RNT_DIR/col_title_full
-COL_DATE=$RNT_DIR/col_date_utc
 COL_URL=$RNT_DIR/col_url
+COL_AUTHOR=$RNT_DIR/col_author
+COL_TITLE=$RNT_DIR/col_title
+COL_TITLE_TR=$RNT_DIR/col_title_tr
+COL_DATE=$RNT_DIR/col_date_utc
+COL_DATE_FMT=$RNT_DIR/col_date_fmt
 COL_NUM=$RNT_DIR/col_num
 COL_NUM_ZERO=$RNT_DIR/col_num_zero
 COL_NUM_PAD=$RNT_DIR/col_num_pad
-COL_TITLE_TR=$RNT_DIR/col_title_tr
-COL_DATE_FMT=$RNT_DIR/col_date_fmt
 
 USAGE="usage: ytr <command> [<args>]
 
@@ -416,7 +416,7 @@ list_cmd() {
         exit 0
     fi;
 
-    if contains $COL_TITLE_TR "$cols" -o contains $COL_TITLE "$cols"; then
+    if contains $COL_TITLE "$cols"; then
         # replace html entities
         sed "s/&nbsp;/ /g;
             s/&amp;/\&/g;
@@ -468,14 +468,12 @@ list_cmd() {
 
 play_desc_cmd() {
     url=$1
-    mkdir -p $RNT_DIR
     curl -s $url > $RNT_DIR/vid
     ec=$?
     [ $ec -ne 0 ] && die "fetching description failed -- curl exit code $ec"
     grep watch-description-text $RNT_DIR/vid > $RNT_DIR/desc
     [ $? -ne 0 ] && die "no description found at $url"
     $YTR_HTML_READER "$RNT_DIR/desc"
-    rm -rf $RNT_DIR
 }
 
 play_cmd() {
@@ -493,7 +491,11 @@ play_cmd() {
     [ -z $1 ] && die "no video specifed" "\n\n$USAGE_PLAY"
     [ ! -r $ENTRIES ] && die "no cache found, use sync command"
     
+    mkdir -p $RNT_DIR || die "unable to create runtime directory at $RNT_DIR"
+
+    cut -f 1 $ENTRIES > $COL_ID
     vid_count=$(wc -l < $ENTRIES)
+
     for vid in $@; do
         if [ "1" -le "$vid" -a "$vid" -le "$vid_count" ] 2>/dev/null; then
             video_id=$(sed "${vid}q;d" $COL_ID) # pick out line $vid
@@ -505,6 +507,8 @@ play_cmd() {
         fi
         $YTR_PLAYER "$url"
     done
+
+    rm -rf $RNT_DIR
 }
 
 help_cmd() {
