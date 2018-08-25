@@ -270,6 +270,7 @@ sync_cmd() {
 
 channel_add_cmd() {
     channel=$1
+    [ -z "$1" ] && die "no channel specified"
     shift
     name=$@
     if echo $channel | grep -q -E "^$CHID_REGEX$"; then
@@ -337,8 +338,8 @@ channel_list_cmd() {
 
 channel_cmd() {
     command=$1
-    shift
     [ -z "$command" ] && channel_list_cmd "$@" && exit 0
+    shift
 
     case $command in
         a|add) channel_add_cmd "$@";;
@@ -364,8 +365,7 @@ list_cmd() {
         esac
     done
     shift $((OPTIND-1))
-    colstr=$1
-    shift
+    [ -n "$1" ] && colstr=$1 && shift
     [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_LIST"
     [ -z "$colstr" ] && colstr=$YTR_COLS
     [ "$days" -gt 0 ] 2>/dev/null || die "invalid day count -- $days"
@@ -513,8 +513,8 @@ play_cmd() {
 
 help_cmd() {
     topic=$1
-    shift
     [ -n "$1" ] && warn "excess arguments -- $@" "\n\n$USAGE_HELP"
+    shift
     if [ -n "$topic" ]; then
         case $topic in
             channel) echo -e "$USAGE_CHANNEL\n\n$USAGE_CHANNEL_ADD\
@@ -532,8 +532,8 @@ help_cmd() {
 }
 
 command=$1
-shift
 [ -z "$command" ] && list_cmd && exit 0
+shift
 
 case $command in
     s|sync) sync_cmd "$@";;
