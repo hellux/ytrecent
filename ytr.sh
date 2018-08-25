@@ -41,7 +41,6 @@ fi
 
 # ytr config fallbacks/defaults
 [ -z "$YTR_PLAYER" ] && YTR_PLAYER="mpv"
-[ -z "$YTR_HTML_READER" ] && YTR_HTML_READER="links -dump"
 [ -z "$YTR_TITLE_LEN" ] && YTR_TITLE_LEN=80
 [ -z "$YTR_SINCE_DAYS" ] && YTR_SINCE_DAYS=30
 [ -z "$YTR_COLS" ] && YTR_COLS="NaTD"
@@ -187,7 +186,6 @@ Launch a sequence of videos with given command. Each video will be run with
 
 options:
     -p -- print video URLs instead of playing
-    -d -- show video description instead of playing
 
 examples:
     play most recent video: ytr play 1
@@ -272,6 +270,7 @@ sync_cmd() {
 
 channel_add_cmd() {
     channel=$1
+    [ -z "$1" ] && die "no channel specified"
     shift
     name=$@
     if echo $channel | grep -q -E "^$CHID_REGEX$"; then
@@ -339,8 +338,8 @@ channel_list_cmd() {
 
 channel_cmd() {
     command=$1
-    shift
     [ -z "$command" ] && channel_list_cmd "$@" && exit 0
+    shift
 
     case $command in
         a|add) channel_add_cmd "$@";;
@@ -366,8 +365,7 @@ list_cmd() {
         esac
     done
     shift $((OPTIND-1))
-    colstr=$1
-    shift
+    [ -n "$1" ] && colstr=$1 && shift
     [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_LIST"
     [ -z "$colstr" ] && colstr=$YTR_COLS
     [ "$days" -gt 0 ] 2>/dev/null || die "invalid day count -- $days"
@@ -468,23 +466,11 @@ list_cmd() {
     rm -rf $RNT_DIR
 }
 
-play_desc_cmd() {
-    url=$1
-    curl -s $url > $RNT_DIR/vid
-    ec=$?
-    [ $ec -ne 0 ] && die "fetching description failed -- curl exit code $ec"
-    grep watch-description-text $RNT_DIR/vid > $RNT_DIR/desc
-    [ $? -ne 0 ] && die "no description found at $url"
-    $YTR_HTML_READER "$RNT_DIR/desc"
-}
-
 play_cmd() {
-    desc=false
     OPTIND=1
-    while getopts :pd flag; do
+    while getopts :p flag; do
         case "$flag" in
             p) YTR_PLAYER="echo";;
-            d) YTR_PLAYER="play_desc_cmd";;
             [?]) die "invalid flag -- $OPTARG"
         esac
     done
@@ -515,8 +501,8 @@ play_cmd() {
 
 help_cmd() {
     topic=$1
-    shift
     [ -n "$1" ] && warn "excess arguments -- $@" "\n\n$USAGE_HELP"
+    shift
     if [ -n "$topic" ]; then
         case $topic in
             channel) echo -e "$USAGE_CHANNEL\n\n$USAGE_CHANNEL_ADD\
@@ -534,8 +520,8 @@ help_cmd() {
 }
 
 command=$1
-shift
 [ -z "$command" ] && list_cmd && exit 0
+shift
 
 case $command in
     s|sync) sync_cmd "$@";;
