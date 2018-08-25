@@ -15,9 +15,10 @@ external player in order to watch the videos.
 
 ## Requirements
 * POSIX shell and utilities
-* GNU or BSD date
-* external player, for playing videos (web browser or player such as `mpv`)
-* external html reader, for viewing descriptions (web browser such as `links`)
+* GNU or BSD `date`
+* `column` utility
+* external downloader/player, for getting and playing videos (web browser or
+  e.g. `mpv` with `youtube-dl`)
 
 ## Usage
     usage: ytr <command> [<args>]

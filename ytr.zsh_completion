@@ -44,8 +44,7 @@ elif (( CURRENT >= 3 )); then
             ;;
         p|play)
             _arguments : '3:' \
-                '-p[print video URLs instead of playing]' \
-                '-d[show video description instead of playing]'
+                '-p[print video URLs instead of playing]'
             local -a videos
             IFS=$'\t'
             while read num author title; do

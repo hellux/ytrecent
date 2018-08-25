@@ -41,7 +41,6 @@ fi
 
 # ytr config fallbacks/defaults
 [ -z "$YTR_PLAYER" ] && YTR_PLAYER="mpv"
-[ -z "$YTR_HTML_READER" ] && YTR_HTML_READER="links -dump"
 [ -z "$YTR_TITLE_LEN" ] && YTR_TITLE_LEN=80
 [ -z "$YTR_SINCE_DAYS" ] && YTR_SINCE_DAYS=30
 [ -z "$YTR_COLS" ] && YTR_COLS="NaTD"
@@ -187,7 +186,6 @@ Launch a sequence of videos with given command. Each video will be run with
 
 options:
     -p -- print video URLs instead of playing
-    -d -- show video description instead of playing
 
 examples:
     play most recent video: ytr play 1
@@ -466,23 +464,11 @@ list_cmd() {
     rm -rf $RNT_DIR
 }
 
-play_desc_cmd() {
-    url=$1
-    curl -s $url > $RNT_DIR/vid
-    ec=$?
-    [ $ec -ne 0 ] && die "fetching description failed -- curl exit code $ec"
-    grep watch-description-text $RNT_DIR/vid > $RNT_DIR/desc
-    [ $? -ne 0 ] && die "no description found at $url"
-    $YTR_HTML_READER "$RNT_DIR/desc"
-}
-
 play_cmd() {
-    desc=false
     OPTIND=1
-    while getopts :pd flag; do
+    while getopts :p flag; do
         case "$flag" in
             p) YTR_PLAYER="echo";;
-            d) YTR_PLAYER="play_desc_cmd";;
             [?]) die "invalid flag -- $OPTARG"
         esac
     done
