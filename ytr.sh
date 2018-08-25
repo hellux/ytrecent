@@ -256,8 +256,10 @@ sync_cmd() {
         awk "$awk_parse" ${feed_file}_entr >> $ENTRIES
     done < $RNT_DIR/chids
 
-    # rm duplicates, sort, place columns in separate files, postprocess
-    sort -t $'\t' -r -k 4 $ENTRIES | uniq > ${ENTRIES}_sorted
+    # sort, rm duplicates
+    sort -t $'\t' -r -k4 $ENTRIES |\
+        sort -t $'\t' -u -k1 |\
+        sort -t $'\t' -r -k4 > ${ENTRIES}_sorted
     mv ${ENTRIES}_sorted $ENTRIES
     rm -rf $RNT_DIR
 
