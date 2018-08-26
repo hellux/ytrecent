@@ -255,9 +255,9 @@ sync_cmd() {
     done < $RNT_DIR/chids
 
     # sort, rm duplicates
-    sort -t $'\t' -r -k4 $ENTRIES |\
-        sort -t $'\t' -u -k1 |\
-        sort -t $'\t' -r -k4 > ${ENTRIES}_sorted
+    sort -t"$(printf '\t')" -r -k4 $ENTRIES |\
+        sort -t"$(printf '\t')" -u -k1 |\
+        sort -t"$(printf '\t')" -r -k4 > ${ENTRIES}_sorted
     mv ${ENTRIES}_sorted $ENTRIES
     rm -rf $RNT_DIR
 
@@ -460,7 +460,7 @@ list_cmd() {
     # merge column files, grab only recent entries, reverse order of entries
     paste $cols | head -n $video_count | sed '1!G;h;$!d' > $RNT_DIR/columns
     if [ "$table" = "true" ]
-    then column -t -s $'\t' $RNT_DIR/columns
+    then column -t -s"$(printf '\t')" $RNT_DIR/columns
     else cat $RNT_DIR/columns
     fi
     rm -rf $RNT_DIR
