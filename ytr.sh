@@ -1,8 +1,8 @@
 warn() {
-    echo -e "warning: $@" 1>&2
+    printf "warning: $@" 1>&2
 }
 die() {
-    echo -e "error: $@" 1>&2
+    printf "error: $@" 1>&2
     rm -rf $RNT_DIR
     exit 1
 }
@@ -502,11 +502,10 @@ play_cmd() {
 help_cmd() {
     topic=$1
     [ -n "$1" ] && warn "excess arguments -- $@" "\n\n$USAGE_HELP"
-    shift
     if [ -n "$topic" ]; then
         case $topic in
-            channel) echo -e "$USAGE_CHANNEL\n\n$USAGE_CHANNEL_ADD\
-                              \n\n$USAGE_CHANNEL_REMOVE";;
+            channel) printf "$USAGE_CHANNEL\n\n$USAGE_CHANNEL_ADD\
+                             \n\n$USAGE_CHANNEL_REMOVE";;
             sync) echo "$USAGE_SYNC";;
             list) echo "$USAGE_LIST";;
             play) echo "$USAGE_PLAY";;
@@ -515,7 +514,7 @@ help_cmd() {
         esac
     else
         echo "ytrecent -- YouTube channel tracker"
-        echo -e "\n$USAGE\n\n$DESC\n\n$DESC_FILES\n\n$DESC_ENV"
+        printf "\n$USAGE\n\n$DESC\n\n$DESC_FILES\n\n$DESC_ENV"
     fi
 }
 
