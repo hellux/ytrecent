@@ -224,7 +224,7 @@ sync_cmd() {
     while read -r chid author; do
         if echo "$chid" | grep -q -E "^$CHID_REGEX$";
         then echo "$chid $author"
-        else warn "invalid channel entry -- $chid $author"
+        else warn 'invalid channel entry -- %s %s' "$chid" "$author"
         fi
     done < "$RNT_DIR/chids_stripped" > "$RNT_DIR/chids"
 
@@ -243,6 +243,12 @@ sync_cmd() {
     then prev_count=$(wc -l < "$ENTRIES")
     else prev_count=0
     fi
+
+    AWK_PARSE='BEGIN { RS="<"; FS=">" }
+    $1 == "yt:videoId" { printf "%s\t", $2 }
+    $1 == "title" { printf "%s\t%s\t", a, $2 }
+    $1 == "published" { printf "%s\n", $2 }'
+
     # parse videos from channel feeds
     while read -r chid author; do
         [ "$verbose" = "true" ] && echo "Parsing videos from $author..."
@@ -252,11 +258,7 @@ sync_cmd() {
         sed '1,/entry/d' "$feed_file" > "${feed_file}_entr"
 
         # parse video entries
-        awk_parse='BEGIN { RS="<"; FS=">" }
-        $1 == "yt:videoId" { printf "%s\t", $2 }
-        $1 == "title" { printf "%s\t%s\t", "'$author'", $2 }
-        $1 == "published" { printf "%s\n", $2 }'
-        awk "$awk_parse" "${feed_file}_entr" >> "$ENTRIES"
+        awk -v"a=$author" "$AWK_PARSE" "${feed_file}_entr" >> "$ENTRIES"
     done < "$RNT_DIR"/chids
 
     # sort, rm duplicates
