@@ -1,16 +1,22 @@
+#!/bin/env sh
+
 warn() {
-    printf "warning: $@" 1>&2
+    str=$1
+    shift
+    printf 'warning: '"$str"'\n' "$@" 1>&2
 }
 die() {
-    printf "error: $@" 1>&2
-    rm -rf $RNT_DIR
+    str=$1
+    shift
+    printf 'error: '"$str"'\n' "$@" 1>&2
+    rm -rf "$RNT_DIR"
     exit 1
 }
 contains() {
     test "${2#*$1}" != "$2"
 }
 rm_comments() {
-    sed 's:#.*$::g;/^\-*$/d;s/ *$//' $1
+    sed 's:#.*$::g;/^\-*$/d;s/ *$//' "$1"
 }
 
 if date -v 1d > /dev/null 2>&1;
@@ -52,23 +58,23 @@ FEED_URL="https://www.youtube.com/feeds/videos.xml?channel_id="
 CHNL_URL="https://www.youtube.com/channel/"
 USER_URL="https://www.youtube.com/user/"
 # id regex
-CHID_REGEX="[a-zA-Z0-9\_-]{24}"
-VIDID_REGEX="[a-zA-Z0-9\_-]{11}"
+CHID_REGEX='[a-zA-Z0-9\_-]{24}'
+VIDID_REGEX='[a-zA-Z0-9\_-]{11}'
 # user channels
-CHID_FILE=$CFG_DIR/channel_ids
+CHID_FILE="$CFG_DIR/channel_ids"
 # cached videos
-ENTRIES=$CCH_DIR/entries
+ENTRIES="$CCH_DIR/entries"
 # tmp postprocess columns
-COL_ID=$RNT_DIR/col_id
-COL_URL=$RNT_DIR/col_url
-COL_AUTHOR=$RNT_DIR/col_author
-COL_TITLE=$RNT_DIR/col_title
-COL_TITLE_TR=$RNT_DIR/col_title_tr
-COL_DATE=$RNT_DIR/col_date_utc
-COL_DATE_FMT=$RNT_DIR/col_date_fmt
-COL_NUM=$RNT_DIR/col_num
-COL_NUM_ZERO=$RNT_DIR/col_num_zero
-COL_NUM_PAD=$RNT_DIR/col_num_pad
+COL_ID="$RNT_DIR/col_id"
+COL_URL="$RNT_DIR/col_url"
+COL_AUTHOR="$RNT_DIR/col_author"
+COL_TITLE="$RNT_DIR/col_title"
+COL_TITLE_TR="$RNT_DIR/col_title_tr"
+COL_DATE="$RNT_DIR/col_date_utc"
+COL_DATE_FMT="$RNT_DIR/col_date_fmt"
+COL_NUM="$RNT_DIR/col_num"
+COL_NUM_ZERO="$RNT_DIR/col_num_zero"
+COL_NUM_PAD="$RNT_DIR/col_num_pad"
 
 USAGE="usage: ytr <command> [<args>]
 
@@ -112,7 +118,6 @@ DESC_FILES="files:
             <channel1 id> <channel1 name>
             <channel2 id> <channel2 name> # comment
                  :               :
-
     ENTRIES [$ENTRIES]
         ENTRIES stores the cache of video metadata obtained by the sync
         command. Each line lists the video ID, author, title and date of a
@@ -201,69 +206,69 @@ sync_cmd() {
         case "$flag" in
             q) quiet=true;;
             v) verbose=true;;
-            c) rm -rf $CCH_DIR;;
-            [?]) die "invalid flag -- $OPTARG"
+            c) rm -rf "$CCH_DIR";;
+            [?]) die 'invalid flag -- %s' "$OPTARG"
         esac
     done
     shift $((OPTIND-1))
 
-    [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_CACHE_SYNC"
-    [ ! -r $CHID_FILE ] && die "no file with channel IDs found at $CHID_FILE"
+    [ -n "$1" ] && die 'excess arguments -- %s\n\n%s' "$*" "$USAGE_SYNC"
+    [ ! -r "$CHID_FILE" ] && die "no file with channel IDs found at $CHID_FILE"
     [ "$quiet" = "true" ] && verbose=false
 
-    mkdir -p $CCH_DIR || die "unable to create cache directory at $CCH_DIR"
-    mkdir -p $RNT_DIR || die "unable to create runtime directory at $RNT_DIR"
+    mkdir -p "$CCH_DIR" || die "unable to create cache directory at $CCH_DIR"
+    mkdir -p "$RNT_DIR" || die "unable to create runtime directory at $RNT_DIR"
 
-    rm_comments $CHID_FILE > $RNT_DIR/chids_stripped
+    rm_comments "$CHID_FILE" > "$RNT_DIR/chids_stripped"
     # rm invalid chids
-    while read chid author; do
-        if echo $chid | grep -q -E "^$CHID_REGEX$";
+    while read -r chid author; do
+        if echo "$chid" | grep -q -E "^$CHID_REGEX$";
         then echo "$chid $author"
         else warn "invalid channel entry -- $chid $author"
         fi
-    done < $RNT_DIR/chids_stripped > $RNT_DIR/chids
+    done < "$RNT_DIR/chids_stripped" > "$RNT_DIR/chids"
 
-    [ ! -s $RNT_DIR/chids ] && die "no channels in CHID file"
+    [ ! -s "$RNT_DIR/chids" ] && die "no channels in CHID file"
 
     # fetch rss feeds
     curl_args="-m1"
     [ "$verbose" = "false" ] && curl_args="$curl_args -s"
-    curl $curl_args $(while read chid author; do
+    curl $curl_args $(while read -r chid author; do
         printf '%s%s -o %s/%s ' "$FEED_URL" "$chid" "$RNT_DIR" "$chid"
-    done < $RNT_DIR/chids )
+    done < "$RNT_DIR/chids" )
     ec=$?
-    [ $ec -ne 0 ] && die "fetch failed -- curl exit code $ec"
+    [ "$ec" -ne 0 ] && die "fetch failed -- curl exit code $ec"
 
-    if [ -r $ENTRIES ]
-    then prev_count=$(wc -l < $ENTRIES)
+    if [ -r "$ENTRIES" ]
+    then prev_count=$(wc -l < "$ENTRIES")
     else prev_count=0
     fi
     # parse videos from channel feeds
-    while read chid author; do
+    while read -r chid author; do
         [ "$verbose" = "true" ] && echo "Parsing videos from $author..."
-        feed_file=$RNT_DIR/$chid
+        feed_file="$RNT_DIR/$chid"
 
         # remove header
-        sed '1,/entry/d' $feed_file > ${feed_file}_entr
+        sed '1,/entry/d' "$feed_file" > "${feed_file}_entr"
 
         # parse video entries
         awk_parse='BEGIN { RS="<"; FS=">" }
         $1 == "yt:videoId" { printf "%s\t", $2 }
         $1 == "title" { printf "%s\t%s\t", "'$author'", $2 }
         $1 == "published" { printf "%s\n", $2 }'
-        awk "$awk_parse" ${feed_file}_entr >> $ENTRIES
-    done < $RNT_DIR/chids
+        awk "$awk_parse" "${feed_file}_entr" >> "$ENTRIES"
+    done < "$RNT_DIR"/chids
 
     # sort, rm duplicates
-    sort -t"$(printf '\t')" -r -k4 $ENTRIES |\
+    sort -t"$(printf '\t')" -r -k4 "$ENTRIES" |\
         sort -t"$(printf '\t')" -u -k1 |\
-        sort -t"$(printf '\t')" -r -k4 > ${ENTRIES}_sorted
-    mv ${ENTRIES}_sorted $ENTRIES
-    rm -rf $RNT_DIR
+        sort -t"$(printf '\t')" -r -k4 > "${ENTRIES}_sorted"
+    mv "${ENTRIES}_sorted" "$ENTRIES"
+    rm -rf "$RNT_DIR"
 
     if [ "$quiet" = "false" ]; then
-        curr_count=$(wc -l < $ENTRIES)
-        diff_count=$(expr $curr_count - $prev_count)
+        curr_count=$(wc -l < "$ENTRIES")
+        diff_count=$((curr_count - prev_count))
         echo "$diff_count new video(s) found."
     fi
 }
@@ -272,68 +277,68 @@ channel_add_cmd() {
     channel=$1
     [ -z "$1" ] && die "no channel specified"
     shift
-    name=$@
-    if echo $channel | grep -q -E "^$CHID_REGEX$"; then
-        url=$CHNL_URL$channel
-        chid=$channel
-    elif echo $channel | grep -q "$CHNL_URL"; then
-        url=$channel
-        chid=$(echo $channel | cut -d/ -f5)
-    elif echo $channel | grep -q "$USER_URL"; then
-        url=$channel
+    name="$*"
+    if echo "$channel" | grep -q -E "^$CHID_REGEX$"; then
+        url="$CHNL_URL$channel"
+        chid="$channel"
+    elif echo "$channel" | grep -q "$CHNL_URL"; then
+        url="$channel"
+        chid=$(echo "$channel" | cut -d/ -f5)
+    elif echo "$channel" | grep -q "$USER_URL"; then
+        url="$channel"
     else
-        url=$USER_URL$channel
+        url="$USER_URL$channel"
     fi
 
-    if [ -z "$chid" -o -z "$name" ]; then
-        mkdir -p $RNT_DIR || die "unable to create runtime dir at $RNT_DIR"
-        curl -s $url > $RNT_DIR/channel 
+    if [ -z "$chid" ] || [ -z "$name" ]; then
+        mkdir -p "$RNT_DIR" || die "unable to create runtime dir at $RNT_DIR"
+        curl -s "$url" > "$RNT_DIR/channel"
         ec=$?
         [ $ec -ne 0 ] && die "channel fetch failed -- curl exit code $ec"
-        if [ -z $chid ]; then
+        if [ -z "$chid" ]; then
             chid=$(awk 'BEGIN { FS="channel_id="; RS="\"" } { print $2 }' \
-                   $RNT_DIR/channel | tr -d '\n')
+                   "$RNT_DIR/channel" | tr -d '\n')
         fi 
     fi;
 
-    echo $chid | grep -q -E "^$CHID_REGEX$" || die "channel id parse failed"
-    if [ -r $CHID_FILE ] && grep -q "^$chid" $CHID_FILE; then
+    echo "$chid" | grep -q -E "^$CHID_REGEX$" || die "channel id parse failed"
+    if [ -r "$CHID_FILE" ] && grep -q "^$chid" "$CHID_FILE"; then
         die "channel already in list -- $chid"
     fi
 
-    [ -z "$name" ] && name=$(sed -n 's/<title>//p' $RNT_DIR/channel | xargs)
+    [ -z "$name" ] && name=$(sed -n 's/<title>//p' "$RNT_DIR/channel" | xargs)
 
-    if [ ! -r $CHID_FILE ]; then
-        mkdir -p $CFG_DIR || die "unable to create config dir at $CFG_DIR"
-        touch $CHID_FILE || die "unable to create CHID_FILE at $CHID_FILE"
+    if [ ! -r "$CHID_FILE" ]; then
+        mkdir -p "$CFG_DIR" || die "unable to create config dir at $CFG_DIR"
+        touch "$CHID_FILE" || die "unable to create CHID_FILE at $CHID_FILE"
     fi
-    echo $chid $name >> $CHID_FILE
-    echo "\"$name\" added, id=$chid"
+    echo "$chid $name" >> "$CHID_FILE"
+    printf '"%s" added, id=%s\n' "$name" "$chid"
 
-    rm -rf $RNT_DIR
+    rm -rf "$RNT_DIR"
 }
 
 channel_remove_cmd() {
-    name=$@
-    [ -r $CHID_FILE ] || die "no CHID_FILE to modify exists"
-    mkdir -p $RNT_DIR || die "unable to create runtime dir at $RNT_DIR"
+    name="$*"
+    [ -r "$CHID_FILE" ] || die "no CHID_FILE to modify exists"
+    mkdir -p "$RNT_DIR" || die "unable to create runtime dir at $RNT_DIR"
 
-    count_pre=$(wc -l < $CHID_FILE)
+    count_pre=$(wc -l < "$CHID_FILE")
     # inverse grep to keep all channels but the one removed
-    rm_comments $CHID_FILE | grep -v -E "^$CHID_REGEX $name$" > $RNT_DIR/new
-    mv $RNT_DIR/new $CHID_FILE
-    count_post=$(wc -l < $CHID_FILE)
+    rm_comments "$CHID_FILE" | grep -v -E "^$CHID_REGEX $name$" > "$RNT_DIR/new"
+    mv "$RNT_DIR/new" "$CHID_FILE"
+    count_post=$(wc -l < "$CHID_FILE")
 
-    if [ $count_post -lt $count_pre ];
-    then echo \"$name\" removed
-    else echo \"$name\" not found
+    if [ "$count_post" -lt "$count_pre" ];
+    then printf 'channel "%s" removed\n' "$name"
+    else die 'channel "%s" not found' "$name"
     fi
 
-    rm -rf $RNT_DIR
+    rm -rf "$RNT_DIR"
 }
 
 channel_list_cmd() {
-    [ -r $CHID_FILE ] && rm_comments $CHID_FILE | cut -f2- -d' ' | sort
+    [ -r "$CHID_FILE" ] && rm_comments "$CHID_FILE" | cut -f2- -d' ' | sort
 }
 
 channel_cmd() {
@@ -345,7 +350,7 @@ channel_cmd() {
         a|add) channel_add_cmd "$@";;
         rm|remove) channel_remove_cmd "$@";;
         ls|list) channel_list_cmd "$@";;
-        *) die "invalid command -- $command" "\n\n$USAGE_CACHE";;
+        *) die 'invalid command -- %s\n\n%s' "$command" "$USAGE_CHANNEL";;
     esac
 }
 
@@ -366,11 +371,11 @@ list_cmd() {
     done
     shift $((OPTIND-1))
     [ -n "$1" ] && colstr=$1 && shift
-    [ -n "$1" ] && die "excess arguments -- $@" "\n\n$USAGE_LIST"
+    [ -n "$1" ] && die 'excess arguments -- %s\n\n%s' "$*" "$USAGE_LIST"
     [ -z "$colstr" ] && colstr=$YTR_COLS
     [ "$days" -gt 0 ] 2>/dev/null || die "invalid day count -- $days"
     [ "$sync" = "true" ] && sync_cmd -q
-    [ ! -r $ENTRIES ] && die "no cache found, use sync command"
+    [ ! -r "$ENTRIES" ] && die "no cache found, use sync command"
 
     cols=""
     OPTIND=1
@@ -389,81 +394,82 @@ list_cmd() {
         esac
     done
 
-    mkdir -p $RNT_DIR || die "unable to create runtime dir at $RNT_DIR"
+    mkdir -p "$RNT_DIR" || die "unable to create runtime dir at $RNT_DIR"
 
     # split cache into separate files
-    cut -f 1 $ENTRIES > $COL_ID
-    cut -f 3 $ENTRIES > $COL_TITLE
-    cut -f 2 $ENTRIES > $COL_AUTHOR
-    cut -f 4 $ENTRIES > $COL_DATE
+    cut -f 1 "$ENTRIES" > "$COL_ID"
+    cut -f 3 "$ENTRIES" > "$COL_TITLE"
+    cut -f 2 "$ENTRIES" > "$COL_AUTHOR"
+    cut -f 4 "$ENTRIES" > "$COL_DATE"
 
     # filter old entries, determine video count
     if [ ! "$all" = "true" ]; then
-        since=$(expr "$(date +%s)" - \( 86400 \* $days \))
+        now=$(date +%s)
+        since=$((now - (86400*days)))
         video_count="0"
-        while read date_utc; do
+        while read -r date_utc; do
             date=$(date_utc_fmt "$date_utc" "%s")
-            if [ $date -lt $since ]
+            if [ "$date" -lt "$since" ]
             then break
-            else video_count=$(expr $video_count + 1)
+            else video_count=$(( video_count + 1))
             fi
-        done < $COL_DATE
+        done < "$COL_DATE"
     else
-        video_count=$(wc -l < $ENTRIES)
+        video_count=$(wc -l < "$ENTRIES")
     fi
-    if [ $video_count -eq 0 ]; then
-        rm -rf $RNT_DIR
+    if [ "$video_count" -eq 0 ]; then
+        rm -rf "$RNT_DIR"
         exit 0
     fi;
 
-    if contains $COL_TITLE "$cols"; then
+    if contains "$COL_TITLE" "$cols"; then
         # replace html entities
-        sed "s/&nbsp;/ /g;
+        sed 's/&nbsp;/ /g;
             s/&amp;/\&/g;
             s/&lt;/\</g;
             s/&gt;/\>/g;
             s/&quot;/\"/g;
             s/&ldquo;/\"/g;
-            s/&rdquo;/\"/g;" $COL_TITLE > ${COL_TITLE}_rc
-        mv ${COL_TITLE}_rc $COL_TITLE
+            s/&rdquo;/\"/g;' "$COL_TITLE" > "${COL_TITLE}_rc"
+        mv "${COL_TITLE}_rc" "$COL_TITLE"
     fi
-    if contains $COL_URL "$cols"; then
-        while read id; do
-            echo $VIDEO_URL$id
-        done < $COL_ID > $COL_URL
+    if contains "$COL_URL" "$cols"; then
+        while read -r id; do
+            echo "$VIDEO_URL$id"
+        done < "$COL_ID" > "$COL_URL"
     fi
-    if contains $COL_TITLE_TR "$cols"; then
-        cut -c1-$YTR_TITLE_LEN $COL_TITLE > $COL_TITLE_TR
+    if contains "$COL_TITLE_TR" "$cols"; then
+        cut -c1-"$YTR_TITLE_LEN" "$COL_TITLE" > "$COL_TITLE_TR"
     fi
-    if contains $COL_NUM "$cols"; then
-        pad=$(expr $(echo $video_count | wc -c) - 1) # max width of video number
-        for num in $(seq $video_count); do
-            printf "%d\n" "$num"
-        done > $COL_NUM
-        if contains $COL_NUM_ZERO "$cols"; then
-            while read num; do
-                printf "%0${pad}d\n" "$num"
-            done < $COL_NUM > $COL_NUM_ZERO
+    if contains "$COL_NUM" "$cols"; then
+        pad=$((${#video_count} - 1))
+        for num in $(seq "$video_count"); do
+            printf '%d\n' "$num"
+        done > "$COL_NUM"
+        if contains "$COL_NUM_ZERO" "$cols"; then
+            while read -r num; do
+                printf '%0'${pad}'d\n' "$num"
+            done < "$COL_NUM" > "$COL_NUM_ZERO"
         fi
-        if contains $COL_NUM_PAD "$cols"; then
-            while read num; do
-                printf "[%${pad}s]\n" "$num"
-            done < $COL_NUM > $COL_NUM_PAD
+        if contains "$COL_NUM_PAD" "$cols"; then
+            while read -r num; do
+                printf '[%'${pad}'s]\n' "$num"
+            done < "$COL_NUM" > "$COL_NUM_PAD"
         fi
     fi
-    if contains $COL_DATE_FMT "$cols"; then
-        head -n $video_count $COL_DATE | while read date; do
+    if contains "$COL_DATE_FMT" "$cols"; then
+        head -n "$video_count" "$COL_DATE" | while read -r date; do
             date_utc_fmt "$date" "$YTR_DATE_FMT"
-        done > $COL_DATE_FMT
+        done > "$COL_DATE_FMT"
     fi
 
     # merge column files, grab only recent entries, reverse order of entries
-    paste $cols | head -n $video_count | sed '1!G;h;$!d' > $RNT_DIR/columns
+    paste $cols | head -n "$video_count" | sed '1!G;h;$!d' > "$RNT_DIR/columns"
     if [ "$table" = "true" ]
-    then column -t -s"$(printf '\t')" $RNT_DIR/columns
-    else cat $RNT_DIR/columns
+    then column -t -s"$(printf '\t')" "$RNT_DIR/columns"
+    else cat "$RNT_DIR/columns"
     fi
-    rm -rf $RNT_DIR
+    rm -rf "$RNT_DIR"
 }
 
 play_cmd() {
@@ -476,46 +482,48 @@ play_cmd() {
     done
     shift $((OPTIND-1))
 
-    [ -z $1 ] && die "no video specifed" "\n\n$USAGE_PLAY"
-    [ ! -r $ENTRIES ] && die "no cache found, use sync command"
+    [ -z "$1" ] && die 'no video specifed\n\n%s' "$USAGE_PLAY"
+    [ ! -r "$ENTRIES" ] && die "no cache found, use sync command"
     
-    mkdir -p $RNT_DIR || die "unable to create runtime directory at $RNT_DIR"
+    mkdir -p "$RNT_DIR" || die "unable to create runtime directory at $RNT_DIR"
 
-    cut -f 1 $ENTRIES > $COL_ID
-    vid_count=$(wc -l < $ENTRIES)
+    cut -f 1 "$ENTRIES" > "$COL_ID"
+    vid_count=$(wc -l < "$ENTRIES")
 
-    for vid in $@; do
-        if [ "1" -le "$vid" -a "$vid" -le "$vid_count" ] 2>/dev/null; then
-            video_id=$(sed "${vid}q;d" $COL_ID) # pick out line $vid
-            url=$VIDEO_URL$video_id
-        elif echo $vid | grep -q -E "^$VIDID_REGEX$"; then
-            url=$VIDEO_URL$vid
+    for vid in "$@"; do
+        if [ "1" -le "$vid" ] 2>/dev/null && [ "$vid" -le "$vid_count" ] 2>/dev/null; then
+            video_id=$(sed "${vid}q;d" "$COL_ID") # pick out line $vid
+            url="$VIDEO_URL$video_id"
+        elif echo "$vid" | grep -q -E "^$VIDID_REGEX$"; then
+            url="$VIDEO_URL$vid"
         else
-            url=$vid
+            url="$vid"
         fi
         $YTR_PLAYER "$url"
     done
 
-    rm -rf $RNT_DIR
+    rm -rf "$RNT_DIR"
 }
 
 help_cmd() {
     topic=$1
-    [ -n "$1" ] && warn "excess arguments -- $@" "\n\n$USAGE_HELP"
     if [ -n "$topic" ]; then
-        case $topic in
-            channel) printf "$USAGE_CHANNEL\n\n$USAGE_CHANNEL_ADD\
-                             \n\n$USAGE_CHANNEL_REMOVE";;
+        shift
+        case "$topic" in
+            channel) printf '%s\n\n%s\n\n%s\n' "$USAGE_CHANNEL" \
+                "$USAGE_CHANNEL_ADD" "$USAGE_CHANNEL_REMOVE";;
             sync) echo "$USAGE_SYNC";;
             list) echo "$USAGE_LIST";;
             play) echo "$USAGE_PLAY";;
             help) echo "$USAGE_HELP";;
-            *) warn "invalid topic -- $topic"; help_cmd "help";;
+            *) warn 'invalid topic -- %s' "$topic"; help_cmd "help";;
         esac
     else
         echo "ytrecent -- YouTube channel tracker"
-        printf "\n$USAGE\n\n$DESC\n\n$DESC_FILES\n\n$DESC_ENV"
+        printf '\n%s\n\n%s\n\n%s\n\n%s\n' \
+            "$USAGE" "$DESC" "$DESC_FILES" "$DESC_ENV"
     fi
+    [ -n "$1" ] && warn 'excess arguments -- %s' "$*"
 }
 
 command=$1
@@ -528,7 +536,7 @@ case $command in
     l|ls|list) list_cmd "$@";;
     p|play) play_cmd "$@";;
     h|help) help_cmd "$@";;
-    *) die "invalid command -- $command" "\n\n$USAGE";;
+    *) die 'invalid command -- %s\n\n%s' "$command" "$USAGE";;
 esac
 
 exit 0
