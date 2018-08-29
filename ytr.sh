@@ -263,7 +263,7 @@ sync_cmd() {
 
     # sort, rm duplicates
     sort -t"$(printf '\t')" -r -k4 "$ENTRIES" |\
-        sort -t"$(printf '\t')" -u -k1 |\
+        sort -t"$(printf '\t')" -u -k 1,1 |\
         sort -t"$(printf '\t')" -r -k4 > "${ENTRIES}_sorted"
     mv "${ENTRIES}_sorted" "$ENTRIES"
     rm -rf "$RNT_DIR"
@@ -372,9 +372,8 @@ list_cmd() {
         esac
     done
     shift $((OPTIND-1))
-    [ -n "$1" ] && colstr=$1 && shift
-    [ -n "$1" ] && die 'excess arguments -- %s\n\n%s' "$*" "$USAGE_LIST"
-    [ -z "$colstr" ] && colstr=$YTR_COLS
+    colstr=${1:-$YTR_COLS}
+    [ -n "$2" ] && shift && die 'excess args -- %s\n\n%s' "$*" "$USAGE_LIST"
     [ "$days" -gt 0 ] 2>/dev/null || die "invalid day count -- $days"
     [ "$sync" = "true" ] && sync_cmd -q
     [ ! -r "$ENTRIES" ] && die "no cache found, use sync command"
