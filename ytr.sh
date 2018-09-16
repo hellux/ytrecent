@@ -54,11 +54,13 @@ fi
 
 # URL prefixes
 VIDEO_URL="https://www.youtube.com/watch?v="
-FEED_URL="https://www.youtube.com/feeds/videos.xml?channel_id="
+FEED_URL_UC="https://www.youtube.com/feeds/videos.xml?channel_id="
+FEED_URL_PL="https://www.youtube.com/feeds/videos.xml?playlist_id="
 CHNL_URL="https://www.youtube.com/channel/"
 USER_URL="https://www.youtube.com/user/"
 # id regex
-CHID_REGEX='[a-zA-Z0-9\_-]{24}'
+CHID_REGEX='UC[a-zA-Z0-9\_-]{22}'
+LIST_REGEX='(PL[a-zA-Z0-9\_-]{32}|RD[a-zA-Z0-9\_-]{11})'
 VIDID_REGEX='[a-zA-Z0-9\_-]{11}'
 # user channels
 CHID_FILE="$CFG_DIR/channel_ids"
@@ -219,23 +221,24 @@ sync_cmd() {
     mkdir -p "$CCH_DIR" || die "unable to create cache directory at $CCH_DIR"
     mkdir -p "$RNT_DIR" || die "unable to create runtime directory at $RNT_DIR"
 
-    rm_comments "$CHID_FILE" > "$RNT_DIR/chids_stripped"
-    # rm invalid chids
+    rm_comments "$CHID_FILE" > "$RNT_DIR/chids"
+    # parse valid feed urls
     while read -r chid author; do
-        if echo "$chid" | grep -q -E "^$CHID_REGEX$";
-        then echo "$chid $author"
+        if echo "$chid" | grep -q -E "^$CHID_REGEX$"; then
+            url="$FEED_URL_UC$chid"
+        elif echo "$chid" | grep -q -E "^$LIST_REGEX$"; then
+            url="$FEED_URL_PL$chid"
         else warn 'invalid channel entry -- %s %s' "$chid" "$author"
         fi
-    done < "$RNT_DIR/chids_stripped" > "$RNT_DIR/chids"
+        printf '%s -o %s ' "$url" "$RNT_DIR/$chid"
+    done < "$RNT_DIR/chids" > "$RNT_DIR/urls"
 
-    [ ! -s "$RNT_DIR/chids" ] && die "no channels in CHID file"
+    [ ! -s "$RNT_DIR/urls" ] && die "no channels or playlists in CHID file"
 
     # fetch rss feeds
     curl_args="-m1"
     [ "$verbose" = "false" ] && curl_args="$curl_args -s"
-    curl $curl_args $(while read -r chid author; do
-        printf '%s%s -o %s/%s ' "$FEED_URL" "$chid" "$RNT_DIR" "$chid"
-    done < "$RNT_DIR/chids" )
+    curl $curl_args $(cat $RNT_DIR/urls)
     ec=$?
     [ "$ec" -ne 0 ] && die "fetch failed -- curl exit code $ec"
 
