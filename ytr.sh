@@ -298,8 +298,9 @@ channel_add_cmd() {
         ec=$?
         [ $ec -ne 0 ] && die "channel fetch failed -- curl exit code $ec"
         if [ -z "$chid" ]; then
-            chid=$(awk 'BEGIN { FS="channel_id="; RS="\"" } { print $2 }' \
-                   "$RNT_DIR/channel" | tr -d '\n')
+            chid=$(grep 'type="application/rss+xml"' "$RNT_DIR/channel" \
+                | awk 'BEGIN { FS="="; RS="?" } $1 == "channel_id" { print $2 }' \
+                | tr -d '">')
         fi 
     fi;
 
