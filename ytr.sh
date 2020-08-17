@@ -219,7 +219,6 @@ sync_cmd() {
     [ "$quiet" = "true" ] && verbose=false
 
     mkdir -p "$CCH_DIR" || die "unable to create cache directory at $CCH_DIR"
-    mkdir -p "$RNT_DIR" || die "unable to create runtime directory at $RNT_DIR"
 
     rm_comments "$CHID_FILE" > "$RNT_DIR/chids"
     # parse valid feed urls
@@ -269,7 +268,6 @@ sync_cmd() {
         sort -t"$(printf '\t')" -u -k 1,1 |\
         sort -t"$(printf '\t')" -r -k4 > "${ENTRIES}_sorted"
     mv "${ENTRIES}_sorted" "$ENTRIES"
-    rm -rf "$RNT_DIR"
 
     if [ "$quiet" = "false" ]; then
         curr_count=$(wc -l < "$ENTRIES")
@@ -296,7 +294,6 @@ channel_add_cmd() {
     fi
 
     if [ -z "$chid" ] || [ -z "$name" ]; then
-        mkdir -p "$RNT_DIR" || die "unable to create runtime dir at $RNT_DIR"
         curl -s "$url" > "$RNT_DIR/channel"
         ec=$?
         [ $ec -ne 0 ] && die "channel fetch failed -- curl exit code $ec"
@@ -319,14 +316,11 @@ channel_add_cmd() {
     fi
     echo "$chid $name" >> "$CHID_FILE"
     printf '"%s" added, id=%s\n' "$name" "$chid"
-
-    rm -rf "$RNT_DIR"
 }
 
 channel_remove_cmd() {
     name="$*"
     [ -r "$CHID_FILE" ] || die "no CHID_FILE to modify exists"
-    mkdir -p "$RNT_DIR" || die "unable to create runtime dir at $RNT_DIR"
 
     count_pre=$(wc -l < "$CHID_FILE")
     # inverse grep to keep all channels but the one removed
@@ -338,8 +332,6 @@ channel_remove_cmd() {
     then printf 'channel "%s" removed\n' "$name"
     else die 'channel "%s" not found' "$name"
     fi
-
-    rm -rf "$RNT_DIR"
 }
 
 channel_list_cmd() {
@@ -397,8 +389,6 @@ list_cmd() {
             [?]) die "invalid column -- $OPTARG"
         esac
     done
-
-    mkdir -p "$RNT_DIR" || die "unable to create runtime dir at $RNT_DIR"
 
     # split cache into separate files
     cut -f 1 "$ENTRIES" > "$COL_ID"
@@ -473,7 +463,6 @@ list_cmd() {
     then column -t -s"$(printf '\t')" "$RNT_DIR/columns"
     else cat "$RNT_DIR/columns"
     fi
-    rm -rf "$RNT_DIR"
 }
 
 play_cmd() {
@@ -489,8 +478,6 @@ play_cmd() {
     [ -z "$1" ] && die 'no video specifed\n\n%s' "$USAGE_PLAY"
     [ ! -r "$ENTRIES" ] && die "no cache found, use sync command"
     
-    mkdir -p "$RNT_DIR" || die "unable to create runtime directory at $RNT_DIR"
-
     cut -f 1 "$ENTRIES" > "$COL_ID"
     vid_count=$(wc -l < "$ENTRIES")
 
@@ -505,8 +492,6 @@ play_cmd() {
         fi
         $YTR_PLAYER "$url"
     done
-
-    rm -rf "$RNT_DIR"
 }
 
 help_cmd() {
@@ -530,6 +515,8 @@ help_cmd() {
     [ -n "$1" ] && warn 'excess arguments -- %s' "$*"
 }
 
+mkdir -p "$RNT_DIR" || die "unable to create runtime directory at $RNT_DIR"
+
 command=$1
 [ -z "$command" ] && list_cmd && exit 0
 shift
@@ -542,5 +529,7 @@ case $command in
     h|help) help_cmd "$@";;
     *) die 'invalid command -- %s\n\n%s' "$command" "$USAGE";;
 esac
+
+rm -rf "$RNT_DIR"
 
 exit 0
