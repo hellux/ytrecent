@@ -13,6 +13,9 @@ metadata to a local cache. These videos can then be listed in order of release
 date - similar to YouTube's subscription page. The script can also invoke an
 external player in order to watch the videos.
 
+Videos can also be found by using the search function and then played by
+invoking a video player.
+
 ## Requirements
 * POSIX shell and utilities
 * GNU or BSD `date`
@@ -27,6 +30,7 @@ external player in order to watch the videos.
         channel ch c  -- handle channels to follow
         sync       s  -- fetch list of recent videos from channels
         list    ls l  -- display cached list of videos
+        search     S  -- search for videos
         play       p  -- play videos via external player
         help       h  -- show information about ytr and its commands
 
@@ -58,4 +62,18 @@ List all videos released in the last month.
 
 Play these three videos in order of release.
 
-    ytr play 3 2 1
+    $ ytr play 3 2 1
+
+Search for videos.
+
+    $ ytr search ben eater
+     :        :                          :                                :           :             :
+    [5]   Ben Eater     Making logic gates from transistors             13:02  836 090 views    5 years ago
+    [4]   Ben Eater     How do CPUs read machine code? — 6502 part 2    49:13  642 794 views    11 months ago
+    [3]   Ben Eater     The world's worst video card?                   32:47  2 940 458 views  1 year ago
+    [2]   Ben Eater     “Hello, world” from scratch on a 6502 — Part 1  27:25  1 793 898 views  1 year ago
+    [1]   Khan Academy  Interview with Ben Eater                        13:30  88 770 views     5 years ago
+
+Play the first result.
+
+    $ ytr play 1

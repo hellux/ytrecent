@@ -18,6 +18,17 @@ contains() {
 rm_comments() {
     sed 's:#.*$::g;/^\-*$/d;s/ *$//' "$1"
 }
+urlencode() {
+    string="$*"
+    while [ -n "$string" ]; do
+        char="$(echo "$string" | cut -c1)"
+        case "$char" in
+        [A-Za-z0-9-*.~]) printf %c "$char";;    # unreserved
+        *) printf "%%%02x" "'$char"             # reserved
+        esac
+        string="$(echo "$string" | cut -c2-)"
+    done
+}
 
 if date -v 1d > /dev/null 2>&1;
 then BSD_DATE=true
@@ -53,19 +64,23 @@ fi
 [ -z "$YTR_DATE_FMT" ] && YTR_DATE_FMT="%a %e %b %H:%M"
 
 # URL prefixes
-VIDEO_URL="https://www.youtube.com/watch?v="
-FEED_URL_UC="https://www.youtube.com/feeds/videos.xml?channel_id="
-FEED_URL_PL="https://www.youtube.com/feeds/videos.xml?playlist_id="
-CHNL_URL="https://www.youtube.com/channel/"
-USER_URL="https://www.youtube.com/user/"
+DOMAIN="https://www.youtube.com"
+VIDEO_URL="$DOMAIN/watch?v="
+FEED_URL_UC="$DOMAIN/feeds/videos.xml?channel_id="
+FEED_URL_PL="$DOMAIN/feeds/videos.xml?playlist_id="
+CHNL_URL="$DOMAIN/channel/"
+USER_URL="$DOMAIN/user/"
+SEARCH_URL="$DOMAIN/results?search_query="
 # id regex
 CHID_REGEX='UC[a-zA-Z0-9\_-]{22}'
 LIST_REGEX='(PL[a-zA-Z0-9\_-]{32}|RD[a-zA-Z0-9\_-]{11})'
 VIDID_REGEX='[a-zA-Z0-9\_-]{11}'
 # user channels
 CHID_FILE="$CFG_DIR/channel_ids"
-# cached videos
+# cache files
 ENTRIES="$CCH_DIR/entries"
+ENTRIES_SEARCH="$CCH_DIR/search"
+LAST_COMMAND="$CCH_DIR/last"
 # tmp postprocess columns
 COL_ID="$RNT_DIR/col_id"
 COL_URL="$RNT_DIR/col_url"
@@ -77,6 +92,30 @@ COL_DATE_FMT="$RNT_DIR/col_date_fmt"
 COL_NUM="$RNT_DIR/col_num"
 COL_NUM_ZERO="$RNT_DIR/col_num_zero"
 COL_NUM_PAD="$RNT_DIR/col_num_pad"
+COL_LENGTH="$RNT_DIR/col_length"
+COL_VIEWS="$RNT_DIR/col_views"
+COL_PUBLISHED="$RNT_DIR/col_published"
+
+JQ_PARSE_SEARCH='
+def get_videos: .contents.twoColumnSearchResultsRenderer
+                .primaryContents.sectionListRenderer.contents[]
+                .itemSectionRenderer | select(. != null) | .contents[]
+                .videoRenderer | select(. != null);
+
+def get_id: .videoId;
+def get_author: .ownerText.runs[].text;
+def get_title: .title.runs[].text;
+def get_length: .lengthText.simpleText;
+def get_views: .viewCountText.simpleText;
+def get_published: .publishedTimeText.simpleText;
+
+get_videos | [ get_id
+             , get_author
+             , get_title
+             , get_length
+             , get_views
+             , get_published
+             ] | @tsv'
 
 USAGE="usage: ytr <command> [<args>]
 
@@ -84,6 +123,7 @@ commands:
     channel ch c  -- handle channels to follow
     sync       s  -- fetch list of recent videos from channels
     list    ls l  -- display cached list of videos
+    search     S  -- search for videos
     play       p  -- play videos via external player
     help       h  -- show information about ytr and its commands"
 
@@ -186,6 +226,10 @@ examples:
     list videos published the last week in cache: ytr list -d 7
     sync cache and list videos from this week: ytr list -sd7"
 
+USAGE_SEARCH="usage: ytr search <query>
+
+Search for videos on YouTube."
+
 USAGE_PLAY="usage: ytr play [-p|-d] <video_number|url|id...>
 
 Launch a sequence of videos with given command. Each video will be run with
@@ -269,11 +313,22 @@ sync_cmd() {
         sort -t"$(printf '\t')" -r -k4 > "${ENTRIES}_sorted"
     mv "${ENTRIES}_sorted" "$ENTRIES"
 
+    # replace html entities
+    sed -i 's/&nbsp;/ /g;
+            s/&amp;/\&/g;
+            s/&lt;/\</g;
+            s/&gt;/\>/g;
+            s/&quot;/\"/g;
+            s/&ldquo;/\"/g;
+            s/&rdquo;/\"/g;' "$ENTRIES"
+
     if [ "$quiet" = "false" ]; then
         curr_count=$(wc -l < "$ENTRIES")
         diff_count=$((curr_count - prev_count))
         echo "$diff_count new video(s) found."
     fi
+
+    echo "sync" > "$LAST_COMMAND"
 }
 
 channel_add_cmd() {
@@ -301,7 +356,7 @@ channel_add_cmd() {
             chid=$(grep 'type="application/rss+xml"' "$RNT_DIR/channel" \
                 | awk 'BEGIN { FS="="; RS="?" } $1 == "channel_id" { print $2 }' \
                 | tr -d '">')
-        fi 
+        fi
     fi;
 
     echo "$chid" | grep -q -E "^$CHID_REGEX$" || die "channel id parse failed"
@@ -393,8 +448,8 @@ list_cmd() {
 
     # split cache into separate files
     cut -f 1 "$ENTRIES" > "$COL_ID"
-    cut -f 3 "$ENTRIES" > "$COL_TITLE"
     cut -f 2 "$ENTRIES" > "$COL_AUTHOR"
+    cut -f 3 "$ENTRIES" > "$COL_TITLE"
     cut -f 4 "$ENTRIES" > "$COL_DATE"
 
     # filter old entries, determine video count
@@ -417,17 +472,6 @@ list_cmd() {
         exit 0
     fi;
 
-    if contains "$COL_TITLE" "$cols"; then
-        # replace html entities
-        sed 's/&nbsp;/ /g;
-            s/&amp;/\&/g;
-            s/&lt;/\</g;
-            s/&gt;/\>/g;
-            s/&quot;/\"/g;
-            s/&ldquo;/\"/g;
-            s/&rdquo;/\"/g;' "$COL_TITLE" > "${COL_TITLE}_rc"
-        mv "${COL_TITLE}_rc" "$COL_TITLE"
-    fi
     if contains "$COL_URL" "$cols"; then
         while read -r id; do
             echo "$VIDEO_URL$id"
@@ -466,6 +510,45 @@ list_cmd() {
     fi
 }
 
+search_cmd() {
+    [ -z "$*" ] && die 'no search query specified\n\n%s' "$USAGE_SEARCH"
+    query="$(urlencode "$*")"
+
+    curl_args="-m1 -s"
+    curl $curl_args "$SEARCH_URL$query&gl=US" -o "$RNT_DIR/response_search"
+    ec=$?
+    [ "$ec" -ne 0 ] && die "fetch failed -- curl exit code $ec"
+
+    echo "search" > "$LAST_COMMAND"
+
+    cat "$RNT_DIR/response_search" \
+        | grep "$var ytInitialData =" | cut -c 21- | rev | cut -c 3- | rev \
+        | jq -r "$JQ_PARSE_SEARCH" > "$ENTRIES_SEARCH"
+
+    video_count="$(wc -l < "$ENTRIES_SEARCH")"
+    if [ "$video_count" -eq 0 ]; then
+        printf "No results for '%s'.\n" "$*"
+        exit 1
+    fi
+
+    cut -f 1 "$ENTRIES_SEARCH" > "$COL_ID"
+    cut -f 2 "$ENTRIES_SEARCH" > "$COL_AUTHOR"
+    cut -f 3 "$ENTRIES_SEARCH" > "$COL_TITLE"
+    cut -f 4 "$ENTRIES_SEARCH" > "$COL_LENGTH"
+    cut -f 5 "$ENTRIES_SEARCH" > "$COL_VIEWS"
+    cut -f 6 "$ENTRIES_SEARCH" > "$COL_PUBLISHED"
+
+    pad=$((${#video_count} - 1))
+    for num in $(seq "$video_count"); do
+        printf '[%'${pad}'s]\n' "$num"
+    done > "$COL_NUM_PAD"
+
+    cols="$COL_NUM_PAD $COL_AUTHOR $COL_TITLE \
+          $COL_LENGTH $COL_VIEWS $COL_PUBLISHED"
+    paste $cols | sed '1!G;h;$!d' > "$RNT_DIR/columns"
+    column -t -s"$(printf '\t')" "$RNT_DIR/columns"
+}
+
 play_cmd() {
     OPTIND=1
     while getopts :p flag; do
@@ -477,10 +560,15 @@ play_cmd() {
     shift $((OPTIND-1))
 
     [ -z "$1" ] && die 'no video specifed\n\n%s' "$USAGE_PLAY"
-    [ ! -r "$ENTRIES" ] && die "no cache found, use sync command"
-    
-    cut -f 1 "$ENTRIES" > "$COL_ID"
-    vid_count=$(wc -l < "$ENTRIES")
+
+    case "$(cat $LAST_COMMAND)" in
+        sync)   entries="$ENTRIES";;
+        search) entries="$ENTRIES_SEARCH";;
+        *) die "no cache found, use sync command";;
+    esac
+
+    cut -f 1 "$entries" > "$COL_ID"
+    vid_count=$(wc -l < "$entries")
 
     for vid in "$@"; do
         if [ "1" -le "$vid" ] 2>/dev/null && [ "$vid" -le "$vid_count" ] 2>/dev/null; then
@@ -504,6 +592,7 @@ help_cmd() {
                 "$USAGE_CHANNEL_ADD" "$USAGE_CHANNEL_REMOVE";;
             sync) echo "$USAGE_SYNC";;
             list) echo "$USAGE_LIST";;
+            search) echo "$USAGE_SEARCH";;
             play) echo "$USAGE_PLAY";;
             help) echo "$USAGE_HELP";;
             *) warn 'invalid topic -- %s' "$topic"; help_cmd "help";;
@@ -527,6 +616,7 @@ case $command in
     c|ch|channel) channel_cmd "$@";;
     l|ls|list) list_cmd "$@";;
     p|play) play_cmd "$@";;
+    S|search) search_cmd "$@";;
     h|help) help_cmd "$@";;
     *) die 'invalid command -- %s\n\n%s' "$command" "$USAGE";;
 esac
