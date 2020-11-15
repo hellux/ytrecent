@@ -396,7 +396,7 @@ channel_list_cmd() {
 
 channel_cmd() {
     command=$1
-    [ -z "$command" ] && channel_list_cmd "$@" && exit 0
+    [ -z "$command" ] && channel_list_cmd "$@" && return
     shift
 
     case $command in
@@ -467,10 +467,6 @@ list_cmd() {
     else
         video_count=$(wc -l < "$ENTRIES")
     fi
-    if [ "$video_count" -eq 0 ]; then
-        rm -rf "$RNT_DIR"
-        exit 0
-    fi;
 
     if contains "$COL_URL" "$cols"; then
         while read -r id; do
@@ -504,10 +500,13 @@ list_cmd() {
 
     # merge column files, grab only recent entries, reverse order of entries
     paste $cols | head -n "$video_count" | sed '1!G;h;$!d' > "$RNT_DIR/columns"
-    if [ "$table" = "true" ]
-    then column -t -s"$(printf '\t')" "$RNT_DIR/columns"
-    else cat "$RNT_DIR/columns"
-    fi
+
+    if [ "$video_count" -gt 0 ]; then
+        if [ "$table" = "true" ]
+        then column -t -s"$(printf '\t')" "$RNT_DIR/columns"
+        else cat "$RNT_DIR/columns"
+        fi
+    fi;
 }
 
 search_cmd() {
@@ -526,10 +525,6 @@ search_cmd() {
         | jq -r "$JQ_PARSE_SEARCH" > "$ENTRIES_SEARCH"
 
     video_count="$(wc -l < "$ENTRIES_SEARCH")"
-    if [ "$video_count" -eq 0 ]; then
-        printf "No results for '%s'.\n" "$*"
-        exit 1
-    fi
 
     cut -f 1 "$ENTRIES_SEARCH" > "$COL_ID"
     cut -f 2 "$ENTRIES_SEARCH" > "$COL_AUTHOR"
@@ -546,7 +541,11 @@ search_cmd() {
     cols="$COL_NUM_PAD $COL_AUTHOR $COL_TITLE \
           $COL_LENGTH $COL_VIEWS $COL_PUBLISHED"
     paste $cols | sed '1!G;h;$!d' > "$RNT_DIR/columns"
-    column -t -s"$(printf '\t')" "$RNT_DIR/columns"
+
+    if [ "$video_count" -gt 0 ];
+    then column -t -s"$(printf '\t')" "$RNT_DIR/columns"
+    else echo "No results for '$*'"
+    fi
 }
 
 play_cmd() {
@@ -605,11 +604,11 @@ help_cmd() {
     [ -n "$1" ] && warn 'excess arguments -- %s' "$*"
 }
 
-mkdir -p "$RNT_DIR" || die "unable to create runtime directory at $RNT_DIR"
-
 command=$1
 [ -z "$command" ] && list_cmd && exit 0
 shift
+
+mkdir -p "$RNT_DIR" || die "unable to create runtime directory at $RNT_DIR"
 
 case $command in
     s|sync) sync_cmd "$@";;
