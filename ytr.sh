@@ -477,7 +477,7 @@ list_cmd() {
         cut -c1-"$YTR_TITLE_LEN" "$COL_TITLE" > "$COL_TITLE_TR"
     fi
     if contains "$COL_NUM" "$cols"; then
-        pad=$((${#video_count} - 1))
+        pad=$((${#video_count}))
         for num in $(seq "$video_count"); do
             printf '%d\n' "$num"
         done > "$COL_NUM"
