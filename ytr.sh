@@ -520,8 +520,8 @@ search_cmd() {
 
     echo "search" > "$LAST_COMMAND"
 
-    cat "$RNT_DIR/response_search" \
-        | grep "$var ytInitialData =" | cut -c 21- | rev | cut -c 3- | rev \
+    grep -E '^var ytInitialData =' "$RNT_DIR/response_search" \
+        | cut -c 21- | rev | cut -c 3- | rev \
         | jq -r "$JQ_PARSE_SEARCH" > "$ENTRIES_SEARCH"
 
     video_count="$(wc -l < "$ENTRIES_SEARCH")"
@@ -560,7 +560,7 @@ play_cmd() {
 
     [ -z "$1" ] && die 'no video specifed\n\n%s' "$USAGE_PLAY"
 
-    case "$(cat $LAST_COMMAND)" in
+    case "$(cat "$LAST_COMMAND")" in
         sync)   entries="$ENTRIES";;
         search) entries="$ENTRIES_SEARCH";;
         *) die "no cache found, use sync command";;
