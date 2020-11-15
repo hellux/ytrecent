@@ -279,7 +279,7 @@ sync_cmd() {
     [ ! -s "$RNT_DIR/urls" ] && die "no channels or playlists in CHID file"
 
     # fetch rss feeds
-    curl_args="-m1"
+    curl_args="-Z"
     [ "$verbose" = "false" ] && curl_args="$curl_args -s"
     curl $curl_args $(cat $RNT_DIR/urls)
     ec=$?
