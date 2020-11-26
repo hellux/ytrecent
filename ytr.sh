@@ -226,17 +226,21 @@ examples:
     list videos published the last week in cache: ytr list -d 7
     sync cache and list videos from this week: ytr list -sd7"
 
-USAGE_SEARCH="usage: ytr search <query>
+USAGE_SEARCH="usage: ytr search [-p] <query>
 
-Search for videos on YouTube."
+Search for videos on YouTube.
 
-USAGE_PLAY="usage: ytr play [-p|-d] <video_number|url|id...>
+options:
+    -p -- play the first search result immediately
+    -u -- print the url of the first search result immediately"
+
+USAGE_PLAY="usage: ytr play [-u] <video_number|url|id...>
 
 Launch a sequence of videos with given command. Each video will be run with
 <command> <url>.
 
 options:
-    -p -- print video URLs instead of playing
+    -u -- print video URLs instead of playing
 
 examples:
     play most recent video: ytr play 1
@@ -253,7 +257,7 @@ sync_cmd() {
             q) quiet=true;;
             v) verbose=true;;
             c) rm -rf "$CCH_DIR";;
-            [?]) die 'invalid flag -- %s' "$OPTARG"
+            *) die "invalid flag\n\n%s" "$USAGE_SYNC"
         esac
     done
     shift $((OPTIND-1))
@@ -419,7 +423,7 @@ list_cmd() {
             d) days="$OPTARG";;
             a) all=true;;
             t) table=false;;
-            [?]) die "invalid flag -- $OPTARG"
+            *) die "invalid flag\n\n%s" "$USAGE_LIST"
         esac
     done
     shift $((OPTIND-1))
@@ -442,7 +446,7 @@ list_cmd() {
             D) cols="$cols $COL_DATE_FMT";;
             u) cols="$cols $COL_ID";;
             U) cols="$cols $COL_URL";;
-            [?]) die "invalid column -- $OPTARG"
+            *) die "invalid column\n\n%s" "$USAGE_LIST"
         esac
     done
 
@@ -510,6 +514,16 @@ list_cmd() {
 }
 
 search_cmd() {
+    play=""
+    OPTIND=1
+    while getopts pu flag; do
+        case "$flag" in
+            p|u) play="$flag";;
+            *) die "invalid flag\n\n%s" "$USAGE_SEARCH"
+        esac
+    done
+    shift $((OPTIND-1))
+
     [ -z "$*" ] && die 'no search query specified\n\n%s' "$USAGE_SEARCH"
     query="$(urlencode "$*")"
 
@@ -527,6 +541,15 @@ search_cmd() {
 
     video_count="$(wc -l < "$ENTRIES_SEARCH")"
 
+    if [ "$video_count" -gt 0 ]; then
+        if [ -n "$play" ]; then
+            play_cmd -"$play" 1
+            return
+        fi
+    else
+        echo "No results for '$*'"
+    fi
+
     cut -f 1 "$ENTRIES_SEARCH" > "$COL_ID"
     cut -f 2 "$ENTRIES_SEARCH" > "$COL_AUTHOR"
     cut -f 3 "$ENTRIES_SEARCH" > "$COL_TITLE"
@@ -543,18 +566,16 @@ search_cmd() {
           $COL_LENGTH $COL_VIEWS $COL_PUBLISHED"
     paste $cols | sed '1!G;h;$!d' > "$RNT_DIR/columns"
 
-    if [ "$video_count" -gt 0 ];
-    then column -t -s"$(printf '\t')" "$RNT_DIR/columns"
-    else echo "No results for '$*'"
-    fi
+    column -t -s"$(printf '\t')" "$RNT_DIR/columns"
 }
 
 play_cmd() {
     OPTIND=1
-    while getopts :p flag; do
+    while getopts pu flag; do
         case "$flag" in
-            p) YTR_PLAYER="echo";;
-            [?]) die "invalid flag -- $OPTARG"
+            p) ;;
+            u) YTR_PLAYER="echo";;
+            *) die "invalid flag\n\n%s" "$USAGE_PLAY"
         esac
     done
     shift $((OPTIND-1))
