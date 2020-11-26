@@ -520,8 +520,9 @@ search_cmd() {
 
     echo "search" > "$LAST_COMMAND"
 
-    grep -E '^var ytInitialData =' "$RNT_DIR/response_search" \
-        | cut -c 21- | rev | cut -c 3- | rev \
+    prestr='ytInitialData = '
+    grep "$prestr" "$RNT_DIR/response_search" \
+        | sed 's/.*'"$prestr"'//;s,;</script>.*,,' \
         | jq -r "$JQ_PARSE_SEARCH" > "$ENTRIES_SEARCH"
 
     video_count="$(wc -l < "$ENTRIES_SEARCH")"
