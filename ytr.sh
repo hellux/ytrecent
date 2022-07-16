@@ -626,11 +626,11 @@ help_cmd() {
     [ -n "$1" ] && warn 'excess arguments -- %s' "$*"
 }
 
+mkdir -p "$RNT_DIR" || die "unable to create runtime directory at $RNT_DIR"
+
 command=$1
 [ -z "$command" ] && list_cmd && exit 0
 shift
-
-mkdir -p "$RNT_DIR" || die "unable to create runtime directory at $RNT_DIR"
 
 case $command in
     s|sync) sync_cmd "$@";;
