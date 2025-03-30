@@ -1,4 +1,4 @@
-#!/bin/env sh
+#!/bin/sh
 
 warn() {
     str=$1
