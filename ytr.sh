@@ -70,6 +70,7 @@ FEED_URL_UC="$DOMAIN/feeds/videos.xml?channel_id="
 FEED_URL_PL="$DOMAIN/feeds/videos.xml?playlist_id="
 CHNL_URL="$DOMAIN/channel/"
 USER_URL="$DOMAIN/user/"
+AT_NAME_URL="$DOMAIN/@"
 SEARCH_URL="$DOMAIN/results?search_query="
 # id regex
 CHID_REGEX='UC[a-zA-Z0-9\_-]{22}'
@@ -348,6 +349,12 @@ channel_add_cmd() {
         chid=$(echo "$channel" | cut -d/ -f5)
     elif echo "$channel" | grep -q "$USER_URL"; then
         url="$channel"
+    elif echo "$channel" | grep -q "$AT_NAME_URL"; then
+        chid=$(curl -s "$channel" | grep '/channel/UC' | sed 's_.*/channel/\(UC[^"]*\)".*_\1_g' | head -n 1)
+	url="$DOMAIN"/channel/"$chid"
+	if [ -z "$name" ]; then
+	    name=$(echo "$channel" | cut -d'/' -f4 | awk '{print substr($0, 2)}')
+	fi
     else
         url="$USER_URL$channel"
     fi
