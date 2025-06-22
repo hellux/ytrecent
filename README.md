@@ -1,12 +1,20 @@
 # ytrecent
+
 Command line utility for keeping up with YouTube channels.
 
 ## Purpose
+
 `ytrecent` is meant to keep track of channels, like YouTube subscriptions, but
 without the need of a Google account or navigating the website with a web
 browser.
 
+## Installation
+
+Download the `ytr.sh` file, and make it executable `chmod u+x ytr.sh`. Copy
+the script into your PATH, e.g. `cp ytr.sh /usr/local/bin/ytr`.
+
 ## Function
+
 Subscriptions are kept track of by keeping a list of channels in a local file.
 The script checks each listed channel for recent videos and stores their
 metadata to a local cache. These videos can then be listed in order of release
@@ -17,13 +25,15 @@ Videos can also be found by using the search function and then played by
 invoking a video player.
 
 ## Requirements
-* POSIX shell and utilities
-* GNU or BSD `date`
-* `column` utility
-* external downloader/player, for getting and playing videos (web browser or
+
+- POSIX shell and utilities
+- GNU or BSD `date`
+- `column` utility
+- external downloader/player, for getting and playing videos (web browser or
   e.g. `mpv` with `youtube-dl`)
 
 ## Usage
+
     usage: ytr <command> [<args>]
 
     commands:
@@ -35,8 +45,11 @@ invoking a video player.
         help       h  -- show information about ytr and its commands
 
 ## Preview
+
 Add some channels to "subscriptions".
 
+    $ ytr channel add https://www.youtube.com/@mikaliden9967
+    "mikaliden9967" added, id=UCgYVXKpeB1y-aoFEn0wJ5PA
     $ ytr channel add eaterbc
     "Ben Eater" added, id=UCS0N5baNlQWJCUrhCEo8WlA
     $ ytr channel add https://www.youtube.com/channel/UC1_uAIS3r8Vu6JjXWvastJg
