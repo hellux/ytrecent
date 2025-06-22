@@ -290,15 +290,22 @@ sync_cmd() {
     ec=$?
     [ "$ec" -ne 0 ] && die "fetch failed -- curl exit code $ec"
 
-    if [ -r "$ENTRIES" ]
-    then prev_count=$(wc -l < "$ENTRIES")
-    else prev_count=0
+    if [ -r "$ENTRIES" ]; then
+        prev_count=$(wc -l < "$ENTRIES")
+    else
+        prev_count=0
     fi
 
     AWK_PARSE='BEGIN { RS="<"; FS=">" }
-    $1 == "yt:videoId" { printf "%s\t", $2 }
-    $1 == "title" { printf "%s\t%s\t", a, $2 }
-    $1 == "published" { printf "%s\n", $2 }'
+    $1 ~ /^link / && $0 ~ /shorts/ { skip = 1 }
+    $1 == "yt:videoId" { if (!skip) vid = $2 }
+    $1 == "title" && vid != "" { if (!skip) title = $2 }
+    $1 == "published" && vid != "" && title != "" {
+        if (!skip) printf "%s\t%s\t%s\t%s\n", vid, a, title, $2;
+        vid=""; title=""; skip=0
+    }'
+
+    : > "$RNT_DIR/tmp_entries"
 
     # parse videos from channel feeds
     while read -r chid author; do
