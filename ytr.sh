@@ -66,7 +66,6 @@ fi
 # URL prefixes
 DOMAIN="https://www.youtube.com"
 VIDEO_URL="$DOMAIN/watch?v="
-FEED_URL_UC="$DOMAIN/feeds/videos.xml?channel_id="
 FEED_URL_PL="$DOMAIN/feeds/videos.xml?playlist_id="
 CHNL_URL="$DOMAIN/channel/"
 USER_URL="$DOMAIN/user/"
@@ -272,10 +271,8 @@ sync_cmd() {
     rm_comments "$CHID_FILE" > "$RNT_DIR/chids"
     # parse valid feed urls
     while read -r chid author; do
-        if echo "$chid" | grep -q -E "^$CHID_REGEX$"; then
-            url="$FEED_URL_UC$chid"
-        elif echo "$chid" | grep -q -E "^$LIST_REGEX$"; then
-            url="$FEED_URL_PL$chid"
+        if echo "$chid" | grep -q -E "^($CHID_REGEX)|($LIST_REGEX)$"; then
+            url="$FEED_URL_PL$(echo "$chid" | sed 's/^UC/UULF/')"
         else warn 'invalid channel entry -- %s %s' "$chid" "$author"
         fi
         printf '%s -o %s ' "$url" "$RNT_DIR/$chid"
