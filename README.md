@@ -8,11 +8,6 @@ Command line utility for keeping up with YouTube channels.
 without the need of a Google account or navigating the website with a web
 browser.
 
-## Installation
-
-Download the `ytr.sh` file, and make it executable `chmod u+x ytr.sh`. Copy
-the script into your PATH, e.g. `cp ytr.sh /usr/local/bin/ytr`.
-
 ## Function
 
 Subscriptions are kept track of by keeping a list of channels in a local file.
@@ -26,10 +21,10 @@ invoking a video player.
 
 ## Requirements
 
-- POSIX shell and utilities
-- GNU or BSD `date`
-- `column` utility
-- external downloader/player, for getting and playing videos (web browser or
+* POSIX shell and utilities
+* GNU or BSD `date`
+* `column` utility
+* external downloader/player, for getting and playing videos (web browser or
   e.g. `mpv` with `youtube-dl`)
 
 ## Usage
@@ -48,8 +43,6 @@ invoking a video player.
 
 Add some channels to "subscriptions".
 
-    $ ytr channel add https://www.youtube.com/@mikaliden9967
-    "mikaliden9967" added, id=UCgYVXKpeB1y-aoFEn0wJ5PA
     $ ytr channel add eaterbc
     "Ben Eater" added, id=UCS0N5baNlQWJCUrhCEo8WlA
     $ ytr channel add https://www.youtube.com/channel/UC1_uAIS3r8Vu6JjXWvastJg
